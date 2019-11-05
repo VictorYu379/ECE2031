@@ -103,7 +103,19 @@ Main:
 	;JUMP	MoveForward
 	JUMP 	TEST
 
-TEST:				; testing logic
+TEST:						; testing logic
+	;LOADI   1000
+	;STORE	Distance
+	;CALL	DistanceToCounter
+	;LOAD	FCnt
+	;OUT 	LCD
+	;IN		TIMER
+	;ADD	FCnt
+	;STORE	FCnt
+	IN      TIMER
+	ADD		60				; test with a constant first
+	Store	FCnt
+
 	CALL    MoveForward
 
 	IN  	TIMER
@@ -121,26 +133,10 @@ Sleep:
 CheckValid:					; to be updated
 	JUMP	CheckValid
 
-MoveForward:
-	;IN 		DIST5
-	;SUB 	Ft4
-	; OUT		LCD
-	;JNEG 	Die
-	;JZERO 	Die
-	; LOADI	0
-	; OUT		SSEG1
-	; LOAD	DTheta
-	; ADDI	-5
-	;CALL	Mod360
-	;STORE	DTheta
-	LOAD	MotionCTR
-	ADDI	1
-	STORE 	MotionCTR
-	OUT		LCD
-	SUB		FCnt
-	JZERO 	StopMotor
-	JNEG	StopMotor
-	JUMP	MoveForward
+MoveForward:				; Fcnt is the target timeer reading
+	IN TIMER
+	SUB 	FCnt
+	JNEG	MoveForward
 StopMotor:
 	LOAD   Zero
 	OUT    LVELCMD     ; Stop motors
@@ -149,7 +145,8 @@ StopMotor:
 	STORE  MotionCTR
 	RETURN 
 
-DoCircle:
+
+DoCircle:					; Do a circle
 	LOAD 	LSpeed
 	OUT		LVELCMD
 	LOAD	RSpeed
@@ -168,7 +165,7 @@ TURN90:
 	STORE 	DTheta
 	RETURN
 
-TURNDeg:
+TURNDeg:					; Turn to any degree
 	LOAD	TarAng
 	STORE	DTheta
 	ADD		CurAng
@@ -176,10 +173,7 @@ TURNDeg:
 	RETURN
 
 UpdateOdometry:
-	JUMP UpdateOdometry	; to be implemented
-	Load  TarAng
-	ADD	  CurAng
-	STORE CurAng
+	;JUMP UpdateOdometry	to be implemented
 	RETURN
 
 DistanceToCounter:
