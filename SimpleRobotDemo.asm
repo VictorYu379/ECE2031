@@ -79,7 +79,7 @@ Main:
 	; execute CLI &B0010 to disable the timer interrupt.
 	
 	LOADI   0
-	STORE 	CTR
+	STORE 	MotionCTR
 
 	;LOADI	32
 	LOADI	FRONTMask
@@ -95,8 +95,30 @@ Main:
 	CALL LookForThings
 	SSEG1  Distance
 	SSEG2  TarAng
+	
+	IN  	TIMER
+	ADD     ONESECOND
+	STORE	SleepCTR
+	CALL Sleep
+	;JUMP	MoveForward
+	JUMP 	TEST
 
-CheckValid:
+TEST:				; testing logic
+	CALL    MoveForward
+
+	IN  	TIMER
+	ADD     ONESECOND
+	STORE	SleepCTR
+	CALL	Sleep
+	JUMP 	TEST
+
+Sleep:
+	IN 		TIMER
+	SUB		SleepCTR
+	JPOS	Sleep
+	RETURN
+
+CheckValid:					; to be updated
 	JUMP	CheckValid
 
 MoveForward:
@@ -111,9 +133,9 @@ MoveForward:
 	; ADDI	-5
 	;CALL	Mod360
 	;STORE	DTheta
-	LOAD	CTR
+	LOAD	MotionCTR
 	ADDI	1
-	STORE 	CTR
+	STORE 	MotionCTR
 	OUT		LCD
 	SUB		FCnt
 	JZERO 	StopMotor
@@ -124,28 +146,37 @@ StopMotor:
 	OUT    LVELCMD     ; Stop motors
 	OUT    RVELCMD
 	LOADI  0
-	STORE  CTR
+	STORE  MotionCTR
+	RETURN 
+
 DoCircle:
 	LOAD 	LSpeed
 	OUT		LVELCMD
 	LOAD	RSpeed
 	OUT		RVELCMD
 CircleLoop:
-	LOAD 	CTR
+	LOAD 	MotionCTR
 	ADDI    1
-	STORE 	CTR
+	STORE 	MotionCTR
 	OUT		LCD
 	SUB 	CCnt
 	JNEG	CircleLoop
-	JPOS 	Main
-	JZERO	Main
+	RETURN
 
 TURN90:
 	LOADI   90
 	STORE 	DTheta
 	RETURN
 
+TURNDeg:
+	LOAD	TarAng
+	STORE	DTheta
+	ADD		CurAng
+	STORE	CurAng
+	RETURN
+
 UpdateOdometry:
+	JUMP UpdateOdometry	; to be implemented
 	Load  TarAng
 	ADD	  CurAng
 	STORE CurAng
@@ -259,12 +290,13 @@ Forever:
 
 ; VARS
 DEAD:      DW &HDEAD   ; Example of a "local" variable
-CTR:       DW &H0000
+MotionCTR: DW &H0000
 ABSY:      DW &H0000
 ABSX:      DW &H0000
 CurAng:    DW &H0000
 Distance:  DW &H0000
 TarAng:    DW &H0000
+SleepCTR:  DW &H0000
 
 ; Timer ISR.  Currently just calls the movement control code.
 ; You could, however, do additional tasks here if desired.
@@ -884,6 +916,7 @@ S4A:     	DW -44
 S5A:     	DW -90
 S6A:     	DW -144
 S7A:     	DW 144
+ONESECOND:  DW 10
 
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
