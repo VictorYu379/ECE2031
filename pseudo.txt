@@ -1,0 +1,49 @@
+start at the beginning
+check each sonar in the front
+
+targetAngle
+
+enable sonars (only ones in the front)
+
+lookForThings():
+    targetDistance = ffff
+    for sonar in sonars:
+        if checkValid() and sonars.distance < targetDistance:
+            targetAngle = sonar.angle
+            targetDistance = sonar.distance
+    return targetAngle, targetDistance
+
+while true:
+    distance = 0
+    while nothing_found:
+        turn(adjDegree)
+        for i in range(10):
+            targetAngle, targetDistance = lookForThings()
+            distance = (distance * (i - 1) + targetDistance)/i;
+
+    moveForward(safetyDistance)
+
+    turn(targetAngle)
+    updateOdometry()
+    moveForward(distance - safetyDistance)
+    updateOdometry()
+    turn(90)
+    updateOdometry()
+    circleLoop()
+    updateOdometry()
+
+    moveForward(safetyDistance)
+
+moveForward(distance):
+    just moveForward first
+    kind of hard to check for obstacle and replan
+    requires a distanceToCounter() method
+
+
+
+
+
+
+
+
+
