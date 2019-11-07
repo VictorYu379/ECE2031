@@ -127,18 +127,24 @@ GoDoMvmt:
 
 HandleTest1State:
 	; move for three seconds then stop for one second
-	LOAD	counter
-	ADDI	1
-	ADDI 	-30
+	LOAD	counter			; read counter
+	ADDI	1				; increment counter
 	STORE	counter
-	JNEG	SkipThis
-	AND		0
-	STORE	counter
+	ADDI 	-30				; check if we've hit 30 (3 seconds)
+	JNEG	SkipThis		; if not, keep moving
+	ADDI	-10				; check if we've hit 10 (1 second) 	
+	JNEG	SetVel0			; if not, don't reset our counter
+	AND		0				
+	STORE	counter			; reset counter if so
+; set movement velocity to 0 (stop)
+SetVel0
+	AND		0				; get zero in case AC isn't zero before
+	STORE 	DVel
+	JUMP GoDoMvmt			; let the MoveAPI do all our heavy lifting
+SkipThis:					; move forward slowly
 	LOAD	FSlow
 	STORE	DVel
-SkipThis:
-
-	JUMP GoDoMvmt
+	JUMP	GoDoMvmt
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
