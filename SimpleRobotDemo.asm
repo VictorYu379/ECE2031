@@ -144,7 +144,7 @@ SetVel0
 SkipThis:					; move forward slowly
 	LOAD	FSlow
 	STORE	DVel
-	JUMP	GoDoMvmt
+	JUMP	GoDoMvmt		; let the MoveAPI do all our heavy lifting
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
