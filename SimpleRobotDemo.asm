@@ -24,13 +24,15 @@ Init:
 	OUT    RVELCMD
 	STORE  DVel        ; Reset API variables
 	STORE  DTheta
-	OUT    SONAREN     ; Disable sonar (optional)
+	;OUT    SONAREN     ; Disable sonar (optional)
 	OUT    BEEP        ; Stop any beeping (optional)
-	
 	CALL   SetupI2C    ; Configure the I2C to read the battery voltage
 	CALL   BattCheck   ; Get battery voltage (and end if too low).
 	OUT    LCD         ; Display battery voltage (hex, tenths of volts)
-	
+	; Enable all sonar
+	LOAD   FullMask
+	OUT	   SONAREN
+
 WaitForSafety:
 	; This loop will wait for the user to toggle SW17.  Note that
 	; SCOMP does not have direct access to SW17; it only has access
@@ -150,10 +152,16 @@ SkipThis:					; move forward slowly
 	;***********************************************************
 	counter:	DW &H0000
 HandleTest2State:
+	; check for an obstacle within four feet (straight ahead)
+	; if so, stop for one second
+	; then proceed until within 1 foot
+
+
 	JUMP GoDoMvmt
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
+	counter2:	DW &H0000
 HandleTest3State:
 	JUMP GoDoMvmt
 	;***********************************************************
@@ -747,6 +755,7 @@ Mask6:    DW &B01000000
 Mask7:    DW &B10000000
 LowByte:  DW &HFF      ; binary 00000000 1111111
 LowNibl:  DW &HF       ; 0000 0000 0000 1111
+FullMask: DW &HFFFF
 
 ; some useful movement values
 OneMeter: DW 961       ; ~1m in 1.04mm units
