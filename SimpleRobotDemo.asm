@@ -78,28 +78,34 @@ Main:
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
 	
+	
 	LOADI   0
 	STORE 	MotionCTR
 
 	;LOADI	32
-	LOADI	FRONTMask
+	LOADI	FRONTMask	;0-5
 	OUT		SONAREN
+	
+	LOADI	0
+	OUT		TIMER
 
-	LOAD 	FSlow
+	;LOAD 	FSlow
 	;STORE   DVel
-	OUT		LVELCMD
-	OUT 	RVELCMD
+	;OUT		LVELCMD
+	;OUT 	RVELCMD
 
 	; LOADI  90
 	; STORE  DTheta      ; use API to get robot to face 90 degrees
-	CALL LookForThings
-	SSEG1  Distance
-	SSEG2  TarAng
+	;CALL LookForThings
+	;LOAD	Distance
+	;OUT		SSEG1
+	;LOAD	TarAng
+	;OUT 	SSEG2
 	
-	IN  	TIMER
-	ADD     ONESECOND
-	STORE	SleepCTR
-	CALL Sleep
+	;IN  	TIMER
+	;ADD     ONESECOND
+	;STORE	SleepCTR
+	;CALL 	Sleep
 	;JUMP	MoveForward
 	JUMP 	TEST
 
@@ -112,58 +118,198 @@ TEST:						; testing logic
 	;IN		TIMER
 	;ADD	FCnt
 	;STORE	FCnt
-	IN      TIMER
-	ADD		60				; test with a constant first
-	Store	FCnt
+	
 
+	CALL	LookForForward
+	
+	;IN  	TIMER
+	;ADD     ONESECOND
+	;STORE	SleepCTR
+	;CALL	Sleep
+	
+	LOAD 	Distance
+	OUT		LCD
+	ADDI	DISCONST
+	;OUT		LCD
+	JPOS	checkRight
+	
+	
+	LOADI   1
+	OUT		SSEG1
+	IN		TIMER
+	ADD 	NCnt
+	STORE   ACnt
+	CALL    TURN90
+	
+	IN 		TIMER
+	ADD		CCnt
+	STORE	ACnt
+	CALL	CircleLoopLeft
+	JUMP	TEST
+	
+checkRight:
+	CALL	LookForRight
+	
+	
+	;IN  	TIMER
+	;ADD     ONESECOND
+	;STORE	SleepCTR
+	;CALL	Sleep
+	
+	LOAD 	Distance
+	ADDI	DISCONST
+	OUT		LCD
+	JPOS	checkLeft
+	
+	;IN		TIMER
+	;ADD 	NCnt
+	;STORE   ACnt
+	;CALL    TURN90
+	
+	LOADI   2
+	OUT		SSEG1
+	
+	IN 		TIMER
+	ADD		CCnt
+	STORE	ACnt
+	CALL	CircleLoopRight
+	JUMP	TEST
+	
+checkLeft:
+	CALL	LookForLeft
+	
+	LOAD 	Distance
+	ADDI	DISCONST
+	OUT		LCD
+	JPOS	continue
+	;IN  	TIMER
+	;ADD     ONESECOND
+	;STORE	SleepCTR
+	;CALL	Sleep
+
+	
+	;IN		TIMER
+	;ADD 	NCnt
+	;STORE   ACnt
+	;CALL    TURN90
+	
+	LOADI   3
+	OUT		SSEG1
+	
+	IN 		TIMER
+	ADD		CCnt
+	STORE	ACnt
+	CALL	CircleLoopLeft
+	JUMP	TEST
+
+	
+Continue:
+	;IN		TIMER
+	;ADD 	NCnt
+	;STORE   ACnt
+	;CALL    TURN90
+	
+	;IN 		TIMER
+	;ADD		CCnt
+	;STORE	ACnt
+	;CALL	CircleLoop
+	
+	
+	IN      TIMER
+	ADDI	10				; test with a constant first
+	STORE	FCnt
 	CALL    MoveForward
 
-	IN  	TIMER
-	ADD     ONESECOND
-	STORE	SleepCTR
-	CALL	Sleep
+	
 	JUMP 	TEST
-
+	;JUMP 	Die
+	
 Sleep:
 	IN 		TIMER
 	SUB		SleepCTR
-	JPOS	Sleep
+	JNEG	Sleep
 	RETURN
 
 CheckValid:					; to be updated
 	JUMP	CheckValid
 
 MoveForward:				; Fcnt is the target timeer reading
-	IN TIMER
+	LOAD 	FMid
+	OUT		LVELCMD
+	LOAD	FMid
+	OUT		RVELCMD
+	IN		TIMER
+	OUT		LCD
 	SUB 	FCnt
+	;OUT		SSEG2
+	;JUMP	MoveForward
 	JNEG	MoveForward
-StopMotor:
-	LOAD   Zero
-	OUT    LVELCMD     ; Stop motors
-	OUT    RVELCMD
-	LOADI  0
-	STORE  MotionCTR
+	LOADI	0
+	OUT		SSEG2			; stop motor
+	
+	LOAD 	ZERO
+	OUT		LVELCMD
+	LOAD	ZERO
+	OUT		RVELCMD
 	RETURN 
 
 
-DoCircle:					; Do a circle
-	LOAD 	LSpeed
-	OUT		LVELCMD
-	LOAD	RSpeed
+CircleLoopLeft:					; Do a circle
+	LOAD 	RSpeed
 	OUT		RVELCMD
-CircleLoop:
-	LOAD 	MotionCTR
-	ADDI    1
-	STORE 	MotionCTR
-	OUT		LCD
-	SUB 	CCnt
-	JNEG	CircleLoop
-	RETURN
+	LOAD	LSpeed
+	OUT		LVELCMD
+	IN		TIMER	
+	SUB 	ACnt
+	OUT		SSEG2
+	;JUMP	MoveForward
+	JNEG	CircleLoopLeft
+	LOADI	0
+	OUT		SSEG2		; stop motor
+	
+	LOAD 	ZERO
+	OUT		LVELCMD
+	LOAD	ZERO
+	OUT		RVELCMD
+	RETURN 
+	
+CircleLoopRight:					; Do a circle
+	LOAD 	LSpeed
+	OUT		RVELCMD
+	LOAD	RSpeed
+	OUT		LVELCMD
+	IN		TIMER	
+	SUB 	ACnt
+	OUT		SSEG2
+	;JUMP	MoveForward
+	JNEG	CircleLoopRight
+	LOADI	0
+	OUT		SSEG2		; stop motor
+	
+	LOAD 	ZERO
+	OUT		LVELCMD
+	LOAD	ZERO
+	OUT		RVELCMD
+	RETURN 
 
 TURN90:
-	LOADI   90
-	STORE 	DTheta
-	RETURN
+	LOAD 	LSpeed
+	OUT		LVELCMD	
+	LOADI	0
+	OUT		RVELCMD
+	IN		TIMER	
+	SUB 	ACnt
+	OUT		SSEG2
+	;JUMP	MoveForward
+	JNEG	TURN90
+	LOADI	0
+	OUT		SSEG2		; stop motor
+	
+	LOAD 	ZERO
+	OUT		LVELCMD
+	LOAD	ZERO
+	OUT		RVELCMD
+	RETURN 
 
 TURNDeg:					; Turn to any degree
 	LOAD	TarAng
@@ -195,58 +341,38 @@ NoAdj:
 	OUT LCD
 	RETURN
 
-LookForThings: 
-	LOAD   c7FFF
+LookForForward: 
+	LOADI  0
 	STORE  Distance
-	IN     DIST0
-	SUB    Distance
-	JPOS   Next1
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S0A
-	STORE  TarAng
-Next1:
-	IN     DIST1
-	SUB    Distance
-	JPOS   Next2
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S1A
-	STORE  TarAng
-Next2:
-	IN     DIST2
-	SUB    Distance
-	JPOS   Next3
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S2A
-	STORE  TarAng
-Next3:
-	IN     DIST3
-	SUB    Distance
-	JPOS   Next4
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S3A
-	STORE  TarAng
-Next4:
-	IN     DIST4
-	SUB    Distance
-	JPOS   Next5
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S4A
-	STORE  TarAng
-Next5:
-	IN     DIST5
-	SUB    Distance
-	JPOS   Next6
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S5A
-	STORE  TarAng
-Next6:	
+	IN	   DIST2
+	ADD    Distance
+	IN	   DIST3
+	ADD    Distance
+	STORE Distance
 	RETURN
+	
+LookForLeft: 
+	LOADI  0
+	STORE  Distance
+	IN	   DIST0
+	ADD    Distance
+	IN	   DIST1
+	ADD    Distance
+	STORE Distance
+	RETURN
+	
+	
+LookForRight: 
+	LOADI  0
+	STORE  Distance
+	IN	   DIST4
+	ADD    Distance
+	IN	   DIST5
+	ADD    Distance
+	STORE Distance
+	RETURN
+	
+	
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; End of our code ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -291,11 +417,13 @@ CurAng:    DW &H0000
 Distance:  DW &H0000
 TarAng:    DW &H0000
 SleepCTR:  DW &H0000
+FCnt:	   DW &H0000
+ACnt:	   DW &H0000
 
 ; Timer ISR.  Currently just calls the movement control code.
 ; You could, however, do additional tasks here if desired.
 CTimer_ISR:
-	CALL    ControlMovement
+	;CALL    ControlMovement
 	RETI   ; return from ISR
 	
 	
@@ -894,10 +1022,10 @@ FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
 
 ; CONST
-LSpeed:		DW 300
-RSpeed: 	DW 400
-FCnt:		DW 200
-CCnt:		DW 400
+LSpeed:		DW 180
+RSpeed: 	DW 350
+NCnt:		DW 12
+CCnt:		DW 70
 CtrConst:	DW 35
 CtrHalf:	DW 17
 ALLMask:	DW &B11111111
@@ -911,6 +1039,7 @@ S5A:     	DW -90
 S6A:     	DW -144
 S7A:     	DW 144
 ONESECOND:  DW 10
+DISCONST:	DW -500
 
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
