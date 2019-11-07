@@ -60,13 +60,9 @@ WaitForUser:
 	LOAD   Zero
 	OUT    XLEDS       ; clear LEDs once ready to continue
 
-
-
-
 ;***************************************************************
 ;* Main code
 ;***************************************************************
-
 Main:
 	OUT    RESETPOS    ; reset the odometry to 0,0,0
 	; configure timer interrupt for the movement control code
@@ -78,187 +74,17 @@ Main:
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
 	
-	LOADI   0
-	STORE 	MotionCTR
-
-	;LOADI	32
-	LOADI	FRONTMask
-	OUT		SONAREN
-
-	LOAD 	FSlow
-	;STORE   DVel
-	OUT		LVELCMD
-	OUT 	RVELCMD
-
-	; LOADI  90
-	; STORE  DTheta      ; use API to get robot to face 90 degrees
-	CALL LookForThings
-	SSEG1  Distance
-	SSEG2  TarAng
-	
-	IN  	TIMER
-	ADD     ONESECOND
-	STORE	SleepCTR
-	CALL Sleep
-	;JUMP	MoveForward
-	JUMP 	TEST
-
-TEST:						; testing logic
-	;LOADI   1000
-	;STORE	Distance
-	;CALL	DistanceToCounter
-	;LOAD	FCnt
-	;OUT 	LCD
-	;IN		TIMER
-	;ADD	FCnt
-	;STORE	FCnt
-	IN      TIMER
-	ADD		60				; test with a constant first
-	Store	FCnt
-
-	CALL    MoveForward
-
-	IN  	TIMER
-	ADD     ONESECOND
-	STORE	SleepCTR
-	CALL	Sleep
-	JUMP 	TEST
-
-Sleep:
-	IN 		TIMER
-	SUB		SleepCTR
-	JPOS	Sleep
-	RETURN
-
-CheckValid:					; to be updated
-	JUMP	CheckValid
-
-MoveForward:				; Fcnt is the target timeer reading
-	IN TIMER
-	SUB 	FCnt
-	JNEG	MoveForward
-StopMotor:
-	LOAD   Zero
-	OUT    LVELCMD     ; Stop motors
-	OUT    RVELCMD
-	LOADI  0
-	STORE  MotionCTR
-	RETURN 
-
-
-DoCircle:					; Do a circle
-	LOAD 	LSpeed
-	OUT		LVELCMD
-	LOAD	RSpeed
-	OUT		RVELCMD
-CircleLoop:
-	LOAD 	MotionCTR
-	ADDI    1
-	STORE 	MotionCTR
-	OUT		LCD
-	SUB 	CCnt
-	JNEG	CircleLoop
-	RETURN
-
-TURN90:
-	LOADI   90
-	STORE 	DTheta
-	RETURN
-
-TURNDeg:					; Turn to any degree
-	LOAD	TarAng
-	STORE	DTheta
-	ADD		CurAng
-	STORE	CurAng
-	RETURN
-
-UpdateOdometry:
-	;JUMP UpdateOdometry	to be implemented
-	RETURN
-
-DistanceToCounter:
-	Load  Distance
-	STORE d16sN
-	Load  CtrConst
-	STORE d16sD
-	CALL  Div16s
-	Load  dres16sQ
-	STORE FCnt
-	Load  dres16sR
-	SUB	  CtrHalf
-	JNEG  NoAdj			;round distance/ctrconst to the nearest integer
-	JZERO NoAdj
-	LOAD  FCnt
-	Add   1
-	Store FCnt
-NoAdj:
-	OUT LCD
-	RETURN
-
-LookForThings: 
-	LOAD   c7FFF
-	STORE  Distance
-	IN     DIST0
-	SUB    Distance
-	JPOS   Next1
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S0A
-	STORE  TarAng
-Next1:
-	IN     DIST1
-	SUB    Distance
-	JPOS   Next2
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S1A
-	STORE  TarAng
-Next2:
-	IN     DIST2
-	SUB    Distance
-	JPOS   Next3
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S2A
-	STORE  TarAng
-Next3:
-	IN     DIST3
-	SUB    Distance
-	JPOS   Next4
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S3A
-	STORE  TarAng
-Next4:
-	IN     DIST4
-	SUB    Distance
-	JPOS   Next5
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S4A
-	STORE  TarAng
-Next5:
-	IN     DIST5
-	SUB    Distance
-	JPOS   Next6
-	ADD	   Distance
-	STORE  Distance
-	LOAD   S5A
-	STORE  TarAng
-Next6:	
-	RETURN
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;; End of our code ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-TurnLoop:
-	IN     Theta
-	ADDI   -90
-	CALL   Abs         ; get abs(currentAngle - 90)
-	ADDI   -3
-	JPOS   TurnLoop    ; if angle error > 3, keep checking
-	; at this point, robot should be within 3 degrees of 90
-	LOAD   FMid
-	STORE  DVel        ; use API to move forward
+	;LOADI  90
+	;STORE  DTheta      ; use API to get robot to face 90 degrees
+; TurnLoop:
+; 	IN     Theta
+; 	ADDI   -90
+; 	CALL   Abs         ; get abs(currentAngle - 90)
+; 	ADDI   -3
+; 	JPOS   TurnLoop    ; if angle error > 3, keep checking
+; 	; at this point, robot should be within 3 degrees of 90
+; 	LOAD   FMid
+; 	STORE  DVel        ; use API to move forward
 
 InfLoop: 
 	JUMP   InfLoop
@@ -281,24 +107,54 @@ Die:
 	OUT    SSEG2       ; "dEAd" on the sseg
 Forever:
 	JUMP   Forever     ; Do this forever.
+	DEAD:  DW &HDEAD   ; Example of a "local" variable
 
-; VARS
-DEAD:      DW &HDEAD   ; Example of a "local" variable
-MotionCTR: DW &H0000
-ABSY:      DW &H0000
-ABSX:      DW &H0000
-CurAng:    DW &H0000
-Distance:  DW &H0000
-TarAng:    DW &H0000
-SleepCTR:  DW &H0000
 
 ; Timer ISR.  Currently just calls the movement control code.
 ; You could, however, do additional tasks here if desired.
 CTimer_ISR:
-	CALL    ControlMovement
+	; check state then let that state handle movement variables
+	LOAD	STATE
+	XOR		TEST1
+	JZERO	HandleTest1State
+	XOR		TEST2
+	JZERO	HandleTest2State
+	XOR TEST3
+	JZERO	HandleTest3State
+GoDoMvmt:
+	CALL   ControlMovement
 	RETI   ; return from ISR
-	
-	
+
+HandleTest1State:
+	; move for three seconds then stop for one second
+	LOAD	counter
+	ADDI	1
+	ADDI 	-30
+	STORE	counter
+	JNEG	SkipThis
+	AND		0
+	STORE	counter
+	LOAD	FSlow
+	STORE	DVel
+SkipThis:
+
+	JUMP GoDoMvmt
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+	counter:	DW &H0000
+HandleTest2State:
+	JUMP GoDoMvmt
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+HandleTest3State:
+	JUMP GoDoMvmt
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+
+
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
@@ -568,7 +424,7 @@ A2cd:       DW 14668    ; = 180/pi with 8 fractional bits
 ; Written by Kevin Johnson.  No licence or copyright applied.
 ; Warning: does not work with factor B = -32768 (most-negative number).
 ; To use:
-; - STORE factors in m16sA and m16sB.
+; - Store factors in m16sA and m16sB.
 ; - Call Mult16s
 ; - Result is stored in mres16sH and mres16sL (high and low words).
 ;*******************************************************************************
@@ -623,7 +479,7 @@ mres16sH: DW 0 ; result high
 ; Written by Kevin Johnson.  No licence or copyright applied.
 ; Warning: results undefined if denominator = 0.
 ; To use:
-; - STORE numerator in d16sN and denominator in d16sD.
+; - Store numerator in d16sN and denominator in d16sD.
 ; - Call Div16s
 ; - Result is stored in dres16sQ and dres16sR (quotient and remainder).
 ; Requires Abs subroutine
@@ -697,7 +553,7 @@ dres16sR: DW 0 ; remainder result
 ; Warning: this is *not* an exact function.  I think it's most wrong
 ; on the axes, and maybe at 45 degrees.
 ; To use:
-; - STORE X and Y offset in L2X and L2Y.
+; - Store X and Y offset in L2X and L2Y.
 ; - Call L2Estimate
 ; - Result is returned in AC.
 ; Result will be in same units as inputs.
@@ -843,7 +699,17 @@ I2CError:
 ;***************************************************************
 ;* Variables
 ;***************************************************************
-Temp:     DW 0 ; "Temp" is not a great name, but can be useful
+Temp:     	DW 0 ; "Temp" is not a great name, but can be useful
+PositionX: 	DW &H0000
+PositionY: 	DW &H0000
+STATE:		DW &H0000	; STATE variable -- track the main state
+
+;***************************************************************
+;* States
+;***************************************************************
+TEST1:		DW &B00000000
+TEST2:		DW &B00000001
+TEST3:		DW &B00000010
 
 ;***************************************************************
 ;* Constants
@@ -892,26 +758,6 @@ FMid:     DW 350       ; 350 is a medium speed
 RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
-
-; CONST
-LSpeed:		DW 300
-RSpeed: 	DW 400
-FCnt:		DW 200
-CCnt:		DW 400
-CtrConst:	DW 35
-CtrHalf:	DW 17
-ALLMask:	DW &B11111111
-FRONTMask:    DW &B00111111
-S0A:        DW 90
-S1A:        DW 44
-S2A:    	DW 12
-S3A:    	DW -12
-S4A:     	DW -44
-S5A:     	DW -90
-S6A:     	DW -144
-S7A:     	DW 144
-ONESECOND:  DW 10
-
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
