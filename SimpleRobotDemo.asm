@@ -154,20 +154,64 @@ SkipThis:					; move forward slowly
 HandleTest2State:
 	; check for an obstacle within four feet (straight ahead)
 	; if so, stop for one second
-	; then proceed until within 1 foot
+	;     then turn until the correct direction
+	;     if so, stop for one second
+	;     then proceed until within 1 foot
+	; otherwise keep moving forward
+	; checks sensors 0-5 in order (not the back two for now)
+	;; eventually we should change this to a helper function that returns
+	;; which sensor detects something closest
+	;; excluding certain sensors
+	LOAD	DIST0
+	SUB		Ft4
+	JNEG	Set90
+	JUMP	Check1
+Set90:
+	LOADI	90
+	JUMP	SetTargetAngle
+Check1:
+	LOAD	DIST1
+	SUB		Ft4
+	LOADI	44
+	JUMP	SetTargetAngle
+	LOAD	DIST2
+	SUB		Ft4
+	LOADI	12
+	JUMP	SetTargetAngle
+	LOAD	DIST3
+	SUB		Ft4
+	LOADI	-12
+	JUMP	SetTargetAngle
+	LOAD	DIST4
+	SUB		Ft4
+	LOADI	-44
+	JUMP	SetTargetAngle
+	LOAD	DIST5
+	SUB		Ft4
+	LOADI	-90
 
+SetTargetAngle
+	; assumes that the target change in angle is currently in AC
+	ADD		THETA
+	STORE	currTarg
 
-	JUMP GoDoMvmt
+SetTargetHeading:
+	; assumes that the target value is stored in currTarg
+	LOAD	currTarg	
+	STORE	DTheta
+	JUMP	GoDoMvmt
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
+	currTarg:	DW &H0000
+	counter1:	DW &H0000
 	counter2:	DW &H0000
 HandleTest3State:
+	; circle with 1ft radius
 	JUMP GoDoMvmt
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
-
 
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
@@ -758,21 +802,22 @@ LowNibl:  DW &HF       ; 0000 0000 0000 1111
 FullMask: DW &HFFFF
 
 ; some useful movement values
-OneMeter: DW 961       ; ~1m in 1.04mm units
+OneMeter:  DW 961       ; ~1m in 1.04mm units
 HalfMeter: DW 481      ; ~0.5m in 1.04mm units
-Ft2:      DW 586       ; ~2ft in 1.04mm units
-Ft3:      DW 879
-Ft4:      DW 1172
-Deg90:    DW 90        ; 90 degrees in odometer units
-Deg180:   DW 180       ; 180
-Deg270:   DW 270       ; 270
-Deg360:   DW 360       ; can never actually happen; for math only
-FSlow:    DW 100       ; 100 is about the lowest velocity value that will move
-RSlow:    DW -100
-FMid:     DW 350       ; 350 is a medium speed
-RMid:     DW -350
-FFast:    DW 500       ; 500 is almost max speed (511 is max)
-RFast:    DW -500
+Ft1:	   DW 293	   ; ~1ft
+Ft2:       DW 586       ; ~2ft in 1.04mm units
+Ft3:       DW 879
+Ft4:       DW 1172
+Deg90:     DW 90        ; 90 degrees in odometer units
+Deg180:    DW 180       ; 180
+Deg270:    DW 270       ; 270
+Deg360:    DW 360       ; can never actually happen; for math only
+FSlow:     DW 100       ; 100 is about the lowest velocity value that will move
+RSlow:     DW -100
+FMid:      DW 350       ; 350 is a medium speed
+RMid:      DW -350
+FFast:     DW 500       ; 500 is almost max speed (511 is max)
+RFast:     DW -500
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
