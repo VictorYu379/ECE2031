@@ -152,67 +152,176 @@ SkipThis:					; move forward slowly
 	;***********************************************************
 	counter:	DW &H0000
 HandleTest2State:
-	; check for an obstacle within four feet (straight ahead)
-	; if so, stop for one second
-	;     then turn until the correct direction
-	;     if so, stop for one second
-	;     then proceed until within 1 foot
-	; otherwise keep moving forward
-	; checks sensors 0-5 in order (not the back two for now)
-	;; eventually we should change this to a helper function that returns
-	;; which sensor detects something closest
-	;; excluding certain sensors
-	LOAD	DIST0
-	SUB		Ft4
-	JNEG	Set90
-	JUMP	Check1
-Set90:
+	;; checks sensors 0-5 (not the back two for now)
+	;; directs DE2 towards which sensor detects something closest
+	;; excluding certain sensors (6 and 7)
+	;; if remaining distance is < 1 ft set DVel to 0
+	CALL	DetectReflector
+	; check that the value is not -1
+	LOADI	-1
+	XOR		sensor_num
+	JZERO	nothingDetected
+	; otherwise, figure out which sensor detected stuff
+Check:
+	LOAD	sensor_num
+	XOR		Mask0
+	JZERO	Sensor0Detected		; sensor_num => 0	
+	XOR		Mask1
+	JZERO	Sensor1Detected		; sensor_num => 1
+	XOR		Mask2
+	JZERO	Sensor2Detected		; sensor_num => 2
+	XOR		Mask3
+	JZERO	Sensor3Detected		; sensor_num => 3
+	XOR		Mask4
+	JZERO	Sensor4Detected		; sensor_num => 4
+	XOR		Mask5
+	JZERO	Sensor5Detected		; sensor_num => 5
+	; if it falls through, let's not change the angle
+	LOADI	0
+	JUMP	SetTargetAngle
+Sensor0Detected:
 	LOADI	90
 	JUMP	SetTargetAngle
-Check1:
-	LOAD	DIST1
-	SUB		Ft4
+Sensor1Detected:
 	LOADI	44
 	JUMP	SetTargetAngle
-	LOAD	DIST2
-	SUB		Ft4
+Sensor2Detected:
 	LOADI	12
 	JUMP	SetTargetAngle
-	LOAD	DIST3
-	SUB		Ft4
+Sensor3Detected:
 	LOADI	-12
 	JUMP	SetTargetAngle
-	LOAD	DIST4
-	SUB		Ft4
+Sensor4Detected:
 	LOADI	-44
 	JUMP	SetTargetAngle
-	LOAD	DIST5
-	SUB		Ft4
+Sensor5Detected:
 	LOADI	-90
-
-SetTargetAngle
+SetTargetAngle:
 	; assumes that the target change in angle is currently in AC
 	ADD		THETA
+	; get the new DTheta
 	STORE	currTarg
-
+; Set Velocity in case of distance < 1 Ft or error
+CheckSensedDistance:
+	LOADI	-1
+	XOR		min
+	JZERO	nothingDetected		;; shouldn't happen; if min = -1 we should've already jumped in earlier check
+	LOAD	min					;; load the measured distance
+	SUB		Ft1					;; subtract 1 ft from that value (if negative then we should set DVel to 0)
+	JNEG	StopMovingForward
+; This is for possible cases where we don't need to change currTarg
 SetTargetHeading:
-	; assumes that the target value is stored in currTarg
+	; assumes that the target angle is stored in currTarg
 	LOAD	currTarg	
 	STORE	DTheta
 	JUMP	GoDoMvmt
+; This is for when the sensors don't detect ANYTHING
+nothingDetected:
+	LOADI	&H1134
+	OUT		LCD
+	JUMP	GoDoMvmt	; not yet decided how to handle this case yet
+StopMovingForward:
+	LOADI	0
+	STORE	DVel
+	JUMP SetTargetHeading
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
+	sensor_num:	DW &H0000
 	currTarg:	DW &H0000
-	counter1:	DW &H0000
-	counter2:	DW &H0000
 HandleTest3State:
-	; circle with 1ft radius
+	; attempt to loop in a
+	; circle with 1/2 ft radius (293/2 = 146.5)
+	; 293(pi) mm circumference = ~920.5 mm
+	; divide 105 mm/s --> 8.77s ~ 9s ==> 41.05 degrees per sec
+		; approximately 4 degrees per 0.1s
+	; 367 mm/s --> 2.51s ~ 3s ==> 143.426 degrees per sec
+		; approximately 14 - 15 degrees per 0.1 sec (alternate?)
+	; 525 mm/s --> 1.753s ~ 2s ==> 205.362 degrees per sec
+		; approximately 20 - 21 degrees per 0.1 sec (alternate? )
 	JUMP GoDoMvmt
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
 
+DetectReflector:
+	; only checks sensors 0-5 (we'll use rear sensors for moving away)
+	; start by initializing min = DIST0 and sensor_num = 0
+	LOAD	Mask0
+	STORE	sensor_num
+	LOAD	DIST0
+	STORE	min
+	; compare dist0 and dist1
+	LOAD	DIST1
+	SUB		min		; dist1 - dist0 (if negative, 1 is closer --
+	JPOS	not1	; if positive, 0 is closer
+	JZERO	not1	; if 0, it doesn't matter but we'll avoid the mem access
+	; otherwise, we'll update our values (min = DIST1 and sensor_num = 1)
+	LOAD	DIST1
+	STORE	min
+	LOAD	Mask1
+	STORE	sensor_num
+not1:
+	; compare the previous min sensor and value to sensor2
+	LOAD	DIST2
+	SUB		min		; if negative the new one is closer
+	JPOS	not2	; if positive, old one is closer
+	JZERO	not2	; if 0, it doesn't matter but we'll avoid the mem access
+	; otherwise, we'll update our values (min = DIST2 and sensor_num = 2)
+	LOAD	DIST2
+	STORE	min
+	LOAD	Mask2
+	STORE	sensor_num
+not2:
+	; compare the previous min sensor and value to sensor3
+	LOAD	DIST3
+	SUB		min		; if negative the new one is closer
+	JPOS	not3	; if positive, old one is closer
+	JZERO	not3	; if 0, it doesn't matter but we'll avoid the mem access
+	; otherwise, we'll update our values (min = DIST3 and sensor_num = 3)
+	LOAD	DIST3
+	STORE	min
+	LOAD	Mask3
+	STORE	sensor_num
+not3:
+	; compare the previous min sensor and value to sensor4
+	LOAD	DIST4
+	SUB		min		; if negative the new one is closer
+	JPOS	not4	; if positive, old one is closer
+	JZERO	not4	; if 0, it doesn't matter but we'll avoid the mem access
+	; otherwise, we'll update our values (min = DIST4 and sensor_num = 4)
+	LOAD	DIST4
+	STORE	min
+	LOAD	Mask4
+	STORE	sensor_num
+not4:
+	; compare the previous min sensor and value to sensor5
+	LOAD	DIST5
+	SUB		min		; if negative the new one is closer
+	JPOS	not5	; if positive, old one is closer
+	JZERO	not5	; if 0, it doesn't matter but we'll avoid the mem access
+	; otherwise, we'll update our values (min = DIST5 and sensor_num = 5)
+	LOAD	DIST5
+	STORE	min
+	LOAD	Mask5
+	STORE	sensor_num
+	; Lastly perform a check that something was actually sensed
+	; "if nothing is sensed, the measured value is set to 0x7FFF" - DE2 handbook
+	LOAD	min
+	XOR		&H7FFF		; if they're equal then we haven't sensed anything yet
+	JZERO	setFail		; although this shouldn't happen as often
+						; because max sensor range is 6 m  = ~20 ft = ~10 tiles
+not5:
+	RETURN
+setFail:
+	LOADI	-1
+	STORE 	sensor_num
+	STORE	min
+	RETURN
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+	min:		DW &H0000
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
