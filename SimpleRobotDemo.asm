@@ -83,7 +83,7 @@ Main:
 	JUMP 	GOTOGOAL
 
 ; Variables
-SAFEDIS:	DW  &H0250
+SAFEDIS:	DW  300
 LDEG:		DW  &H0000
 RDEG:		DW	&H0000
 ; Variables for movement 
