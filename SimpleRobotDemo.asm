@@ -272,9 +272,9 @@ TURNRIGHT:
     RETURN
 
 MOVE:
-    LOAD   LVEL
+    LOAD   LLVEL
     OUT    LVELCMD
-    LOAD   RVEL
+    LOAD   RRVEL
     OUT    RVELCMD
     RETURN
  
