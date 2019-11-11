@@ -90,8 +90,9 @@ RDEG:		DW	&H0000
 ; (we have our own movement function triggered by clock) 
 ; (check out movement)
 MTHETA:    	DW 	0
-LVEL:     	DW 	0    
-RVEL:     	DW 	0
+LLVEL:     	DW 	0    
+RRVEL:     	DW 	0
+OLDTIMER:   DW  0
 
 
 ; CONST
@@ -105,7 +106,7 @@ MRAD:       DW &H0157
 LRAD:       DW &H0165
 PADD:       DW &H0015
 
-CCNT:		DW 20		; TIMER COUNTS 20
+CCNT:		DW 150		; TIMER COUNTS 20
 
 GOTOGOAL:
 	LOAD	FRONTMASK
@@ -116,9 +117,9 @@ GOTOGOAL:
     IN      DIST3
     OUT     SSEG2
 
-    LOADI   FMid
-    STORE	LVEL
-	STORE	RVEL
+    LOADI   250
+    STORE	LLVEL
+	STORE	RRVEL
 
 SONAR2:				; check for things in front of SONAR2
     IN      DIST2
@@ -136,55 +137,71 @@ SONAR3:				; check for things in front of SONAR3
 	OUT		SSEG1
 	JPOS	SONAR2
 	CALL 	DOCIRCLE1
-    JUMP    GOTOGOAL
+    JUMP    SONAR2
 
 DOCIRCLE1:				; SONAR2/SONAR3 DETECT REFLECTOR
     LOADI   0           ; stop wheels first
-    STORE	LVEL
-	STORE	RVEL		
+    STORE	LLVEL
+	STORE	RRVEL		
     CALL    Wait1       ; WAIT A SECOND
 
-    LOADI   55          ; tTURN 55 DEGREE LEFT
+    LOADI   90         ; tTURN 55 DEGREE LEFT
     STORE   LDEG
     CALL    TURNLEFT
 
     LOADI   0           ; STOP THE WHEELS
-    STORE   RVEL
-    STORE   LVEL
+    STORE   RRVEL
+    STORE   LLVEL
 
     LOAD    FIVEMASK          ; CHECK RIGHT TO FIND THE TERMINATING CONDITION
     OUT     SONAREN 
     CALL    CIRCLEMRAD
+
+	LOAD	FRONTMASK
+	OUT		SONAREN
+	
+	LOADI	250
+	STORE   RRVEL
+    STORE   LLVEL	
+
 	RETURN
 
 CIRCLEMRAD:
     LOADI   0
     OUT     TIMER				; SETUP THE SPEED FOR CIRCLE
-    LOADI   350
-    STORE   LVEL
-    LOADI   200
-    STORE   RVEL
+    LOADI   310
+    STORE   LLVEL
+    LOADI   150
+    STORE   RRVEL
 
-    IN      DIST5				; CHECK THE DISTANCE READING FROM RIGHT SONAR
-    SUB		SRAD				; TOO CLOSE
-    OUT		LCD
-	JNEG	CIRCLELRAD
+    ;IN      DIST5				; CHECK THE DISTANCE READING FROM RIGHT SONAR
+    ;SUB		SRAD				; TOO CLOSE
+    ;OUT		LCD
+	;JNEG	CIRCLELRAD
 	
-    IN      DIST5				
-    SUB     LRAD				; TOO FAR AWAY
-    JPOS    CIRCLESRAD
+    ;IN      DIST5				
+    ;SUB     LRAD				; TOO FAR AWAY
+    ;JPOS    CIRCLESRAD
     
 	IN      TIMER
     SUB     CCNT
-    JPOS    CIRCLEMRAD
+
+	OUT		SSEG2
+    JNEG    CIRCLEMRAD
 	RETURN
 
 
 CIRCLELRAD:						; MAKE CIRCLE WITH LARGER RADIUS
+	IN      TIMER
+	STORE   OLDTIMER
+
+	LOADI   0
+	OUT     TIMER
+
     LOADI   300
-    STORE   LVEL
+    STORE   LLVEL
     LOADI   200
-    STORE   RVEL  
+    STORE   RRVEL  
 
 	IN      DIST5
     OUT     SSEG1
@@ -193,13 +210,23 @@ CIRCLELRAD:						; MAKE CIRCLE WITH LARGER RADIUS
     SUB     CCNT
     OUT     LCD
 	JPOS   	CIRCLELRAD
+
+	LOAD    OLDTIMER
+	OUT     TIMER
+
 	JUMP	CIRCLEMRAD
    
 CIRCLESRAD:						; MAKE CIRCLE WITH SMALLER RADIUS
+	IN      TIMER
+	STORE   OLDTIMER
+
+	LOADI   0
+	OUT     TIMER
+
     LOADI   350
-    STORE   LVEL
+    STORE   LLVEL
     LOADI   250
-    STORE   RVEL
+    STORE   RRVEL
     
     IN      DIST5
     OUT     SSEG1
@@ -207,12 +234,16 @@ CIRCLESRAD:						; MAKE CIRCLE WITH SMALLER RADIUS
     IN      TIMER
     SUB     CCNT
 	JPOS	CIRCLESRAD
+
+	LOAD    OLDTIMER
+	OUT     TIMER
+
     JUMP    CIRCLEMRAD
     
 
 ; rotate {RotateLeftDegrees} to the left 
 TURNLEFT:
-	LOAD    100
+	LOADI    100
 	OUT		RVELCMD
 	LOADI   -100
 	OUT		LVELCMD
@@ -227,7 +258,7 @@ TURNLEFT:
 
 
 TURNRIGHT:
-    LOAD    -100
+    LOADI    -100
 	OUT		RVELCMD
     LOADI   100
 	OUT		LVELCMD
@@ -283,15 +314,8 @@ Die:
 Forever:
 	JUMP   Forever     ; Do this forever.
 
-; VARS
 DEAD:      DW &HDEAD   ; Example of a "local" variable
-MotionCTR: DW &H0000
-ABSY:      DW &H0000
-ABSX:      DW &H0000
-CurAng:    DW &H0000
-Distance:  DW &H0000
-TarAng:    DW &H0000
-SleepCTR:  DW &H0000
+
 
 ; Timer ISR.  Currently just calls the movement control code.
 ; You could, however, do additional tasks here if desired.
@@ -894,27 +918,6 @@ RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
 
-; CONST
-LSpeed:		DW 300
-RSpeed: 	DW 400
-
-DISCONST:	DW 300
-
-FCnt:		DW 200
-CCnt:		DW 400
-CtrConst:	DW 35
-CtrHalf:	DW 17
-ALLMask:	DW &B11111111
-FRONTMask:    DW &B00111111
-S0A:        DW 90
-S1A:        DW 44
-S2A:    	DW 12
-S3A:    	DW -12
-S4A:     	DW -44
-S5A:     	DW -90
-S6A:     	DW -144
-S7A:     	DW 144
-ONESECOND:  DW 10
 
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
