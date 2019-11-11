@@ -129,22 +129,27 @@ GoDoMvmt:
 
 HandleTest1State:
 	; move for three seconds then stop for one second
+	; edit: stop for 3 seconds then move for 1
 	LOAD	counter			; read counter
 	ADDI	1				; increment counter
 	STORE	counter
+	OUT		LCD				; debug
 	ADDI 	-30				; check if we've hit 30 (3 seconds)
 	JNEG	SkipThis		; if not, keep moving
+	OUT		LCD				; debug
 	ADDI	-10				; check if we've hit 10 (1 second) 	
-	JNEG	SetVel0			; if not, don't reset our counter
-	AND		0				
+	JNEG	SetVel			; if not, don't reset our counter
+	OUT		LCD				; debug
+	LOADI	0				
 	STORE	counter			; reset counter if so
 ; set movement velocity to 0 (stop)
-SetVel0
-	AND		0				; get zero in case AC isn't zero before
+SetVel:
+	LOADI	0				; get zero in case AC isn't zero before - swap this to actual vel
+	OUT		LCD				; debug
 	STORE 	DVel
 	JUMP GoDoMvmt			; let the MoveAPI do all our heavy lifting
 SkipThis:					; move forward slowly
-	LOAD	FSlow
+	LOAD	FSlow			; swap this to zero
 	STORE	DVel
 	JUMP	GoDoMvmt		; let the MoveAPI do all our heavy lifting
 	;***********************************************************
@@ -156,49 +161,81 @@ HandleTest2State:
 	;; directs DE2 towards which sensor detects something closest
 	;; excluding certain sensors (6 and 7)
 	;; if remaining distance is < 1 ft set DVel to 0
+	;; do every 1 seconds
+	LOAD	checker
+	ADDI	1
+	OUT		SSEG1
+	STORE	checker
+	ADDI	-10
+	JNEG	StopMovingForward
+	LOADI	0
+	STORE	checker
 	CALL	DetectReflector
 	; check that the value is not -1
 	LOADI	-1
+	OUT		LCD
 	XOR		sensor_num
 	JZERO	nothingDetected
 	; otherwise, figure out which sensor detected stuff
 Check:
 	LOAD	sensor_num
+	OUT		LCD					; debug
 	XOR		Mask0
 	JZERO	Sensor0Detected		; sensor_num => 0	
+	LOAD	sensor_num
 	XOR		Mask1
 	JZERO	Sensor1Detected		; sensor_num => 1
+	LOAD	sensor_num
 	XOR		Mask2
 	JZERO	Sensor2Detected		; sensor_num => 2
+	LOAD	sensor_num
 	XOR		Mask3
 	JZERO	Sensor3Detected		; sensor_num => 3
+	LOAD	sensor_num
 	XOR		Mask4
 	JZERO	Sensor4Detected		; sensor_num => 4
+	LOAD	sensor_num
 	XOR		Mask5
 	JZERO	Sensor5Detected		; sensor_num => 5
 	; if it falls through, let's not change the angle
 	LOADI	0
+	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor0Detected:
 	LOADI	90
+	OUT		SSEG1
+	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor1Detected:
 	LOADI	44
+	OUT		SSEG1
+	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor2Detected:
 	LOADI	12
+	OUT		SSEG1
+	STORE	changeTheta
+	; OUT		LCD
 	JUMP	SetTargetAngle
 Sensor3Detected:
 	LOADI	-12
+	OUT		SSEG1
+	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor4Detected:
 	LOADI	-44
+	OUT		SSEG1
+	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor5Detected:
 	LOADI	-90
+	OUT		SSEG1
+	STORE	changeTheta
 SetTargetAngle:
-	; assumes that the target change in angle is currently in AC
-	ADD		THETA
+	LOAD	changeTheta
+	OUT		SSEG2
+	IN		THETA
+	ADD		changeTheta
 	; get the new DTheta
 	STORE	currTarg
 ; Set Velocity in case of distance < 1 Ft or error
@@ -206,19 +243,24 @@ CheckSensedDistance:
 	LOADI	-1
 	XOR		min
 	JZERO	nothingDetected		;; shouldn't happen; if min = -1 we should've already jumped in earlier check
-	LOAD	min					;; load the measured distance
-	SUB		Ft1					;; subtract 1 ft from that value (if negative then we should set DVel to 0)
-	JNEG	StopMovingForward
+	;LOAD	min					;; load the measured distance
+	;SUB	Ft1					;; subtract 1 ft from that value (if negative then we should set DVel to 0)
+	;JNEG	StopMovingForward
 ; This is for possible cases where we don't need to change currTarg
 SetTargetHeading:
 	; assumes that the target angle is stored in currTarg
+	; set DVel to 0 just in case
 	LOAD	currTarg	
 	STORE	DTheta
+	LOADI	0
+	STORE	DVel
 	JUMP	GoDoMvmt
 ; This is for when the sensors don't detect ANYTHING
 nothingDetected:
 	LOADI	&H1134
 	OUT		LCD
+	LOADI	0
+	STORE	DVel
 	JUMP	GoDoMvmt	; not yet decided how to handle this case yet
 StopMovingForward:
 	LOADI	0
@@ -227,94 +269,125 @@ StopMovingForward:
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
-	sensor_num:	DW &H0000
-	currTarg:	DW &H0000
+	checker:	 DW	&H0000
+	changeTheta: DW &H0000
+	sensor_num:	 DW &H0000
+	currTarg:	 DW &H0000
 HandleTest3State:
 	; attempt to loop in a
 	; circle with 1/2 ft radius (293/2 = 146.5)
+	; change to 1 foot, half all values
 	; 293(pi) mm circumference = ~920.5 mm
 	; divide 105 mm/s --> 8.77s ~ 9s ==> 41.05 degrees per sec
-		; approximately 4 degrees per 0.1s
+		; approximately 4 degrees per 0.1s (2s)
 	; 367 mm/s --> 2.51s ~ 3s ==> 143.426 degrees per sec
-		; approximately 14 - 15 degrees per 0.1 sec (alternate?)
+		; approximately 14 - 15 degrees per 0.1 sec (alternate?) (8)
 	; 525 mm/s --> 1.753s ~ 2s ==> 205.362 degrees per sec
-		; approximately 20 - 21 degrees per 0.1 sec (alternate? )
-	JUMP GoDoMvmt
+		; approximately 20 - 21 degrees per 0.1 sec (alternate?) 10
+	LOAD	FSlow
+	STORE	DVel
+	IN		THETA
+	ADD		2
+	STORE	DTheta
+	; add a check to stop?
+	IN		DIST0
+	XOR		INTEGER_MAX
+	JZERO	WeDoneMessedUp
+	JUMP	GoDoMvmt
+WeDoneMessedUp:
+	LOADI	0
+	STORE	DVel
+	IN		THETA
+	STORE	DTheta
+	JUMP	GoDoMvmt	
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
-
+	
 DetectReflector:
 	; only checks sensors 0-5 (we'll use rear sensors for moving away)
 	; start by initializing min = DIST0 and sensor_num = 0
+	LOADI	0
+	OUT		SSEG1
 	LOAD	Mask0
 	STORE	sensor_num
-	LOAD	DIST0
+	IN		DIST0
 	STORE	min
 	; compare dist0 and dist1
-	LOAD	DIST1
+	IN		DIST1
 	SUB		min		; dist1 - dist0 (if negative, 1 is closer --
 	JPOS	not1	; if positive, 0 is closer
 	JZERO	not1	; if 0, it doesn't matter but we'll avoid the mem access
 	; otherwise, we'll update our values (min = DIST1 and sensor_num = 1)
-	LOAD	DIST1
+	IN		DIST1
 	STORE	min
 	LOAD	Mask1
 	STORE	sensor_num
 not1:
 	; compare the previous min sensor and value to sensor2
-	LOAD	DIST2
+	LOADI	1
+	OUT		SSEG1
+	IN		DIST2
 	SUB		min		; if negative the new one is closer
 	JPOS	not2	; if positive, old one is closer
 	JZERO	not2	; if 0, it doesn't matter but we'll avoid the mem access
 	; otherwise, we'll update our values (min = DIST2 and sensor_num = 2)
-	LOAD	DIST2
+	IN		DIST2
 	STORE	min
 	LOAD	Mask2
 	STORE	sensor_num
 not2:
 	; compare the previous min sensor and value to sensor3
-	LOAD	DIST3
+	LOADI	2
+	OUT		SSEG1
+	IN		DIST3
 	SUB		min		; if negative the new one is closer
 	JPOS	not3	; if positive, old one is closer
 	JZERO	not3	; if 0, it doesn't matter but we'll avoid the mem access
 	; otherwise, we'll update our values (min = DIST3 and sensor_num = 3)
-	LOAD	DIST3
+	IN		DIST3
 	STORE	min
 	LOAD	Mask3
 	STORE	sensor_num
 not3:
 	; compare the previous min sensor and value to sensor4
-	LOAD	DIST4
+	LOADI	3
+	OUT		SSEG1
+	IN		DIST4
 	SUB		min		; if negative the new one is closer
 	JPOS	not4	; if positive, old one is closer
 	JZERO	not4	; if 0, it doesn't matter but we'll avoid the mem access
 	; otherwise, we'll update our values (min = DIST4 and sensor_num = 4)
-	LOAD	DIST4
+	IN		DIST4
 	STORE	min
 	LOAD	Mask4
 	STORE	sensor_num
 not4:
 	; compare the previous min sensor and value to sensor5
-	LOAD	DIST5
+	LOADI	4
+	OUT		SSEG1
+	IN		DIST5
 	SUB		min		; if negative the new one is closer
 	JPOS	not5	; if positive, old one is closer
 	JZERO	not5	; if 0, it doesn't matter but we'll avoid the mem access
 	; otherwise, we'll update our values (min = DIST5 and sensor_num = 5)
-	LOAD	DIST5
+	IN		DIST5
 	STORE	min
 	LOAD	Mask5
 	STORE	sensor_num
+not5:
 	; Lastly perform a check that something was actually sensed
 	; "if nothing is sensed, the measured value is set to 0x7FFF" - DE2 handbook
-	LOAD	min
-	XOR		&H7FFF		; if they're equal then we haven't sensed anything yet
+	LOADI	5
+	OUT		SSEG1
+	LOAD	INTEGER_MAX
+	XOR		min			; if they're equal then we haven't sensed anything yet
 	JZERO	setFail		; although this shouldn't happen as often
 						; because max sensor range is 6 m  = ~20 ft = ~10 tiles
-not5:
 	RETURN
 setFail:
 	LOADI	-1
+	OUT		LCD			; debug
 	STORE 	sensor_num
 	STORE	min
 	RETURN
@@ -869,7 +942,7 @@ I2CError:
 Temp:     	DW 0 ; "Temp" is not a great name, but can be useful
 PositionX: 	DW &H0000
 PositionY: 	DW &H0000
-STATE:		DW &H0000	; STATE variable -- track the main state
+STATE:		DW &H0001	; STATE variable -- track the main state
 
 ;***************************************************************
 ;* States
@@ -882,18 +955,19 @@ TEST3:		DW &B00000010
 ;* Constants
 ;* (though there is nothing stopping you from writing to these)
 ;***************************************************************
-NegOne:   DW -1
-Zero:     DW 0
-One:      DW 1
-Two:      DW 2
-Three:    DW 3
-Four:     DW 4
-Five:     DW 5
-Six:      DW 6
-Seven:    DW 7
-Eight:    DW 8
-Nine:     DW 9
-Ten:      DW 10
+NegOne:   		DW -1
+Zero:     		DW 0
+One:      		DW 1
+Two:      		DW 2
+Three:    		DW 3
+Four:     		DW 4
+Five:     		DW 5
+Six:   		    DW 6
+Seven: 		    DW 7
+Eight:  		DW 8
+Nine:     		DW 9
+Ten:      		DW 10
+INTEGER_MAX:	DW &H7FFF
 
 ; Some bit masks.
 ; Masks of multiple bits can be constructed by ORing these
