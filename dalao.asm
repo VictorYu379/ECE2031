@@ -60,13 +60,9 @@ WaitForUser:
 	LOAD   Zero
 	OUT    XLEDS       ; clear LEDs once ready to continue
 
-
-
-
 ;***************************************************************
 ;* Main code
 ;***************************************************************
-
 Main:
 	OUT    RESETPOS    ; reset the odometry to 0,0,0
 	; configure timer interrupt for the movement control code
@@ -78,234 +74,206 @@ Main:
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
 	
-
-	JUMP 	GOTOGOAL
-
-; Variables
-SAFEDIS:	DW  300
-LDEG:		DW  &H0000
-RDEG:		DW	&H0000
-; Variables for movement 
-; (we have our own movement function triggered by clock) 
-; (check out movement)
-MTHETA:    	DW 	0
-LLVEL:     	DW 	0    
-RRVEL:     	DW 	0
-OLDTIMER:   DW  0
-FACE: 		DW  0
-
-
-; CONST
-FRONTMASK:	DW	&B00001100
-FIVEMASK :	DW  &B00100000
-BOTHMASK :  DW  &B00100001
-
-LS1:		DW  350
-RS1:		DW  200
-
-SRAD:       DW 300
-MRAD:       DW 300
-LRAD:       DW 1000
-PADD:       DW &H0015
-
-CCNT:		DW 150		; TIMER COUNTS 20
-SCNT:       DW 25
-FCNT:		DW 10
-
-GOTOGOAL:
-	LOAD	FRONTMASK
-	OUT		SONAREN
-
-	IN      DIST2
+	LOADI   32
+    OUT     SONAREN 
+	;LOADI   180
+	;STORE   DTheta
+	
+MoveTowardTarget:
+    LOADI   &B00001100
+    OUT     SONAREN    ; enable front sonar, number 2
+    IN      DIST2
     OUT     SSEG1
     IN      DIST3
     OUT     SSEG2
+    LOADI   225
+    STORE   MyVelL
+    STORE   MyVelR
 
-    LOADI   250
-    STORE	LLVEL
-	STORE	RRVEL
-
-SONAR2:				; check for things in front of SONAR2
-    IN      DIST2
-    SUB     SAFEDIS
-
-	OUT		SSEG1
-	JPOS	SONAR3
-	CALL 	DOCIRCLE1
-
-
-SONAR3:				; check for things in front of SONAR3
-    IN      DIST3
-    SUB     SAFEDIS
-
-	OUT		SSEG1
-	JPOS	SONAR2
-	CALL 	DOCIRCLE1
-    JUMP    SONAR2
-
-DOCIRCLE1:				; SONAR2/SONAR3 DETECT REFLECTOR
-    LOADI   0           ; stop wheels first
-    STORE	LLVEL
-	STORE	RRVEL		
-    CALL    Wait1       ; WAIT A SECOND
-
-    ;LOADI   90         ; tTURN 55 DEGREE LEFT
-    ;STORE   LDEG
     
-	LOADI   0
-	OUT     TIMER
-	CALL    TURNLEFT
+    
+ 
+CheckDist2:
 
-    LOADI   0           ; STOP THE WHEELS
-    STORE   RRVEL
-    STORE   LLVEL
+    IN      DIST2
+    SUB     FrontLimit
+    ;JZERO   CheckDist3
+    ;JNEG    CheckDist3
+    JZERO   StopAndCircle
+    JNEG    StopAndCircle
+    JUMP    CheckDist3
 
-    LOAD    FIVEMASK          ; CHECK RIGHT TO FIND THE TERMINATING CONDITION
-    OUT     SONAREN 
-    CALL    CIRCLEMRAD
 
-	LOADI   5
-	OUT		SSEG1
-	CALL    CIRCLEANDFIND
+; when sonar 2 OR 3 detect a distance smaller than &H150, stop and circle
+CheckDist3:
+    ; displays sonar 2 and 3 on the seven seg
 
-	LOAD	FRONTMASK
-	OUT		SONAREN
+    IN      DIST3
+    SUB     FrontLimit
+    ;JZERO   StopAndCircle
+    ;JNEG    StopAndCircle
+    JZERO   StopAndCircle
+    JNEG    StopAndCircle
+
+    JUMP    Checkdist2
+
+ZhunBeiZuoZhuan:	
+	IN		Theta
+	STORE	Face	
+	LOADI	-450
+	STORE	MyVelL
+	LOADI	450
+	STORE	MyVelR
+	LOADI	16
+	OUT		SONAREN	
+ZuoZhuan:
+
+	IN		DIST4
+	ADDI	-500
+	JPOS	ZuoZhuan
+	JZERO	ZuoZhuan
+	JNEG	StartCircling	
 	
-	LOADI	250
-	STORE   RRVEL
-    STORE   LLVEL	
 
-	RETURN
+StopAndCircle:
+	JUMP	ZhunBeiZuoZhuan
+	;XXXXXXXXXXX
+    ;LOADI   0           ; stop the wheels
+    ;STORE   MyVelR
+    ;STORE   MyVelL
+    ;CALL    Wait1
 
-CIRCLEANDFIND:
-	LOAD    BOTHMASK
-	OUT 	SONAREN
-CIRCLEANDFINDLOOP:
-	LOADI   310
-    STORE   LLVEL
+    LOADI   50         ; turn 90 degress to the left
+    STORE   RotateLeftDegrees
+    CALL    RotateLeft
+    JUMP    StartCircling
+    
+    
+    ;XXXXXXXXXXXXXXXXXXXXXXX
+    LOADI   0           ; stop the wheels
+    STORE   MyVelR
+    STORE   MyVelL
+
+    LOADI   &B00110000          ;enable sonar number 5
+    OUT     SONAREN 
     LOADI   150
-    STORE   RRVEL
-	IN      DIST5				; CHECK THE DISTANCE READING FROM RIGHT SONAR
-    SUB		SRAD				; TOO CLOSE
-    OUT		LCD
-
-	JPOS	CONTINUEMRAD
-	CALL	CIRCLELRAD
-
-CONTINUEMRAD:
-	IN      DIST0
-	SUB     LRAD
-	JPOS	CIRCLEANDFINDLOOP
-
-	LOADI   0           
-    STORE	LLVEL
-	STORE	RRVEL		
-    CALL    Wait1     
-	LOADI   0
-	OUT     TIMER
-	CALL    TURNLEFT
-
-	RETURN
-
-
-CIRCLEMRAD:
-    LOADI   0
-	OUT     TIMER
-CIRCLEMRADLOOP:
-    LOADI   310
-    STORE   LLVEL
-    LOADI   150
-    STORE   RRVEL
-
-    IN      DIST5				; CHECK THE DISTANCE READING FROM RIGHT SONAR
-    SUB		SRAD				; TOO CLOSE
-    OUT		LCD
-	JPOS	CONTINUEMRAD
-	CALL	CIRCLELRAD
-
-CONTINUEMRAD:
-	IN      TIMER
-    SUB     CCNT
-
-	OUT		SSEG2
-    JNEG    CIRCLEMRADLOOP
-	RETURN
-
-
-CIRCLELRAD:						; MAKE CIRCLE WITH LARGER RADIUS
-	IN      TIMER
-	STORE   OLDTIMER
-LRADLOOP:
-    LOADI   300
-    STORE   LLVEL
-    LOADI   200
-    STORE   RRVEL  
-
+    STORE   MyVelL
     IN      TIMER
-    SUB     CCNT
-	SUB     OLDTIMER
-    OUT     SSEG1
-	JNEG    LRADLOOP
+    ADD     40
+    STORE   DesiredTime
+    JUMP    StartCircling
+    ;XXXXXXXXXXXXXXXXXXXXXXX
+  
+    
+Radius3:    DW &H0145
+Radius4:    DW &H0151
+Radius5:    DW &H0157
+Radius6:    DW &H0162
+Radius7:    DW &H0171
+Radius8:    DW &H0200
 
-	RETURN
+Margin:         DW &H0015
+DesiredTime:    DW 0
 
-; rotate {RotateLeftDegrees} to the left 
-TURNLEFT:
-	LOADI   50
-	OUT		RVELCMD
-	LOADI   -50
-	OUT		LVELCMD
+Heading:   DW &H00    
+    
+    
+StartCircling:	
+	LOADI	350
+	STORE	MyVelL
+	LOADI	200
+	STORE	MyVelR
+	
+	IN		Theta
+	STORE	Face
+	;LOADI	&H1111
+	OUT		SSEG1
+	
+ShangBanQuan:
+	IN		Theta
+	OUT		SSEG2
+	SUB		Face
+	CALL	Abs
+	ADDI	-180
+	JZERO	XiaBanQuan
+	JUMP 	ShangBanQuan
+	
+XiaBanQuan:
+	IN		Theta
+	SUB		Face
+	JZERO	Searching
+	JUMP	XiaBanQuan
 
-TURNLEFTLOOP:
-	IN		TIMER
-    SUB     SCNT
-    OUT     SSEG1
-    JNEG   	TURNLEFTLOOP
+	Face:	DW 0
+	
+Searching:
+	LOADI 	1
+	OUT		SONAREN
+	IN		DIST0
+	STORE	Distance
+	OUT		LCD
+	SUB		OneMeter
+	;JNEG	Departure	
+	JNEG	PrepareToTurnLeft
+	JUMP	Searching
+	
+PrepareToTurnLeft:
+	;IN		Theta
+	;STORE	Face		
+	LOADI	-250
+	STORE	MyVelL
+	LOADI	250
+	STORE	MyVelR
+	LOADI	64
+	OUT		SONAREN	
+TurnLeft:
+	;IN		DIST3
+	;SUB		Distance'
+	IN		DIST6
+	ADDI	-500
+	JPOS	TurnLeft
+	JZERO	TurnLeft
+	JNEG	MoveTowardTarget	
+	
+Departure:
+	;xxxxxxxxxxxxxxxxxxx
+	LOADI	50
+	STORE	RotateLeftDegrees
+	CALL	RotateLeft
+	LOADI	31
+	OUT		LEDS
+	JUMP	MoveTowardTarget
+	
+		
+;OneMeter:	DW 1000	
+Distance:	DW 0
+		
 
-    RETURN
+	
+FrontLimit: DW 300
 
-RLEFT:
-	IN      THETA
-	STORE	FACE
-ROTATELEFT:
+	
+RotateLeft:
+
     LOADI   200
-    OUT		RVELCMD
+    STORE   MyVelR
     LOADI   -200
-    OUT		LVELCMD
+    STORE   MyVelL
     IN      Theta
     ;OUT     SSEG1
-    SUB     LDEG
-    JPOS    COMPARE
-    JZERO	COMPARE
-    JNEG	NEG
-NEG:
+    SUB     RotateLeftDegrees
+    JPOS    Compare
+    JZERO	Compare
+    JNEG	NegativeAngle
+NegativeAngle:
 	ADDI	360
-COMPARE:
-    SUB		FACE
-    JPOS	ROTATELEFT
-    JNEG    ROTATELEFT
+Compare:
+    SUB		Face
+    JPOS	RotateLeft
+    JNEG   RotateLeft
     RETURN	
     
-MOVE:
-    LOAD   LLVEL
-    OUT    LVELCMD
-    LOAD   RRVEL
-    OUT    RVELCMD
-    RETURN
- 
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;; End of our code ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-TurnLoop:
-	IN     Theta
-	ADDI   -90
-	CALL   Abs         ; get abs(currentAngle - 90)
-	ADDI   -3
-	JPOS   TurnLoop    ; if angle error > 3, keep checking
-	; at this point, robot should be within 3 degrees of 90
-	LOAD   FMid
-	STORE  DVel        ; use API to move forward
+    RotateLeftDegrees:	DW 0
 
 InfLoop: 
 	JUMP   InfLoop
@@ -328,17 +296,29 @@ Die:
 	OUT    SSEG2       ; "dEAd" on the sseg
 Forever:
 	JUMP   Forever     ; Do this forever.
-
-DEAD:      DW &HDEAD   ; Example of a "local" variable
+	DEAD:  DW &HDEAD   ; Example of a "local" variable
 
 
 ; Timer ISR.  Currently just calls the movement control code.
 ; You could, however, do additional tasks here if desired.
 CTimer_ISR:
-	CALL    MOVE
+	;CALL   ControlMovement
+	CALL	MyMovement
 	RETI   ; return from ISR
+
+MyTheta:	DW 0
+MyVelL:		DW 0	
+MyVelR:		DW 0
+
+MyMovement:
+	LOAD   MyVelL
+	OUT    LVELCMD
+	LOAD   MyVelR
+	OUT    RVELCMD
+	RETURN
+		
 	
-	
+		
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
@@ -608,7 +588,7 @@ A2cd:       DW 14668    ; = 180/pi with 8 fractional bits
 ; Written by Kevin Johnson.  No licence or copyright applied.
 ; Warning: does not work with factor B = -32768 (most-negative number).
 ; To use:
-; - STORE factors in m16sA and m16sB.
+; - Store factors in m16sA and m16sB.
 ; - Call Mult16s
 ; - Result is stored in mres16sH and mres16sL (high and low words).
 ;*******************************************************************************
@@ -663,7 +643,7 @@ mres16sH: DW 0 ; result high
 ; Written by Kevin Johnson.  No licence or copyright applied.
 ; Warning: results undefined if denominator = 0.
 ; To use:
-; - STORE numerator in d16sN and denominator in d16sD.
+; - Store numerator in d16sN and denominator in d16sD.
 ; - Call Div16s
 ; - Result is stored in dres16sQ and dres16sR (quotient and remainder).
 ; Requires Abs subroutine
@@ -737,7 +717,7 @@ dres16sR: DW 0 ; remainder result
 ; Warning: this is *not* an exact function.  I think it's most wrong
 ; on the axes, and maybe at 45 degrees.
 ; To use:
-; - STORE X and Y offset in L2X and L2Y.
+; - Store X and Y offset in L2X and L2Y.
 ; - Call L2Estimate
 ; - Result is returned in AC.
 ; Result will be in same units as inputs.
@@ -901,6 +881,8 @@ Seven:    DW 7
 Eight:    DW 8
 Nine:     DW 9
 Ten:      DW 10
+FOURFEET: DW 1219
+Twenty:   DW 20
 
 ; Some bit masks.
 ; Masks of multiple bits can be constructed by ORing these
@@ -933,11 +915,15 @@ RMid:     DW -350
 FFast:    DW 500       ; 500 is almost max speed (511 is max)
 RFast:    DW -500
 
-
-
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
 I2CRCmd:  DW &H0190    ; write nothing, read one byte, addr 0x90
+SmallRadius:   DW &H0150
+LargeRadius:   DW &H0165
+MediumRadius:  DW &H0157
+
+
+
 
 DataArray:
 	DW 0
