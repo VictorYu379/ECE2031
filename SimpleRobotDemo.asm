@@ -77,10 +77,10 @@ Main:
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
-	LOADI	600
+	LOADI	650
 	OUT	SONALARM		 ; write HalfMeter to SONALARM to set interrupt
 							 ; to alarm when reflector is within half meter
-	LOADI	&B00111111
+	LOADI	&B00011110
 	OUT	SONARINT		 ; only enable the front and side sonars to interrupt
 	SEI	&B0001		 ; enable interrupts from source 1 (sonar)
 	JUMP	GoStraight	 ; go straight indefinitely
@@ -98,9 +98,9 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 Circling:
 	LOAD	Eight
 	OUT		SSEG2
-	LOAD	FMid
+	LOADI	500
 	OUT     LVELCMD
-	LOADI	180
+	LOADI	300
 	OUT		RVELCMD
 	JUMP	Circling
 
@@ -308,7 +308,7 @@ Turn90:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 80
+	ADDI	 60
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
