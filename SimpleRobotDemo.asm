@@ -77,7 +77,7 @@ Main:
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
-	LOAD	HalfMeter
+	LOADI	600
 	OUT	SONALARM		 ; write HalfMeter to SONALARM to set interrupt
 							 ; to alarm when reflector is within half meter
 	LOADI	&B00111111
@@ -100,7 +100,7 @@ Circling:
 	OUT		SSEG2
 	LOAD	FMid
 	OUT     LVELCMD
-	LOAD	Zero
+	LOADI	180
 	OUT		RVELCMD
 	JUMP	Circling
 
@@ -144,7 +144,7 @@ State2:
 State3:
 	JUMP  Turn90		 ; State 3 is Turn90
 State4:
-	JUMP  Die
+	JUMP  Circling
 End_Sonar_Int:
 	LOADI	 &B00111111	 
 	OUT	 SONARINT	 ; reopen the interrupt
@@ -233,13 +233,14 @@ SonarData:
 TurnTo2:
 ; Turn to the angle where head is pointing to the reflector
 	LOAD	 Zero
-	ADDI	 12
+	ADDI	 15
+	CALL   	 Mod360
 	STORE	 Angle		; prepare parameter for turning
 	JUMP	 Turn
 
 TurnTo3:
 	LOAD	 Zero
-	ADDI	 -12
+	ADDI	 -15
 	STORE	 Angle
 	JUMP	 Turn
 
@@ -279,19 +280,27 @@ Turn:
 	JUMP	 State3
 
 KeepTurning:
+	LOAD	 MinIndex
+	OUT		 SSEG2
 	LOAD	 Angle				; load parameter into AC
 	STORE	 DTheta				; put desired angle to DTheta
-	LOAD	 Ten
+	LOAD	 FSlow
 	STORE	 DVel					; set desired speed to 0
 	CALL	 ControlMovement	; call API
 	IN		 THETA				; read odometry
-	SUB	 Angle				; subtract parameter Angle
-	CALL	 Abs					
-	ADDI	 -3					; if the difference is bigger than 3 degrees
+	STORE	 Temp_THETA
+	LOAD	 Angle				; subtract parameter Angle
+	CALL	 Mod360
+	SUB		 Temp_THETA
+	CALL	 Abs				
+	OUT		 SSEG1
+	;ADDI	 -3					; if the difference is bigger than 3 degrees
 	JPOS	 KeepTurning		; keep turning
 	RETURN						; otherwise, return
 ; Local variable for KeepTurning
 Angle:
+	DW		 &H0000
+Temp_THETA:
 	DW		 &H0000
 	
 Turn90:
@@ -299,7 +308,7 @@ Turn90:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 90
+	ADDI	 80
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
