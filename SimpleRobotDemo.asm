@@ -162,24 +162,30 @@ HandleTest2State:
 	;; excluding certain sensors (6 and 7)
 	;; if remaining distance is < 1 ft set DVel to 0
 	;; do every 1 seconds
+	LOAD	closeEnough			; 0 if too far, 1 if <= 250
+	JZERO	SkipHeadingCheck	; if not within 250, skip the Heading Check
+	CALL	VerifyHeading
+	LOAD	stopIt				
+	JPOS	StopDetect			; 0 if don't stop, 1 if stop
+SkipHeadingCheck:
 	LOAD	checker
 	ADDI	1
 	OUT		SSEG1
 	STORE	checker
-	ADDI	-10
-	JNEG	StopMovingForward
+	ADDI	-5
+	JNEG	StopTurning
 	LOADI	0
 	STORE	checker
 	CALL	DetectReflector
 	; check that the value is not -1
-	LOADI	-1
-	OUT		LCD
-	XOR		sensor_num
-	JZERO	nothingDetected
+	LOAD	sensor_num
+	JNEG	nothingDetected
 	; otherwise, figure out which sensor detected stuff
+	; and do necessary checks
+	CALL	VerifyRange			; check how close we are
 Check:
 	LOAD	sensor_num
-	OUT		LCD					; debug
+	;OUT		LCD					; debug
 	XOR		Mask0
 	JZERO	Sensor0Detected		; sensor_num => 0	
 	LOAD	sensor_num
@@ -203,37 +209,37 @@ Check:
 	JUMP	SetTargetAngle
 Sensor0Detected:
 	LOADI	90
-	OUT		SSEG1
+	;OUT		SSEG1
 	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor1Detected:
 	LOADI	44
-	OUT		SSEG1
+	;OUT		SSEG1
 	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor2Detected:
 	LOADI	12
-	OUT		SSEG1
+	;OUT		SSEG1
 	STORE	changeTheta
 	; OUT		LCD
 	JUMP	SetTargetAngle
 Sensor3Detected:
 	LOADI	-12
-	OUT		SSEG1
+	;OUT		SSEG1
 	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor4Detected:
 	LOADI	-44
-	OUT		SSEG1
+	;OUT		SSEG1
 	STORE	changeTheta
 	JUMP	SetTargetAngle
 Sensor5Detected:
 	LOADI	-90
-	OUT		SSEG1
+	;OUT		SSEG1
 	STORE	changeTheta
 SetTargetAngle:
 	LOAD	changeTheta
-	OUT		SSEG2
+	;OUT		SSEG2
 	IN		THETA
 	ADD		changeTheta
 	; get the new DTheta
@@ -245,34 +251,50 @@ CheckSensedDistance:
 	JZERO	nothingDetected		;; shouldn't happen; if min = -1 we should've already jumped in earlier check
 	;LOAD	min					;; load the measured distance
 	;SUB	Ft1					;; subtract 1 ft from that value (if negative then we should set DVel to 0)
-	;JNEG	StopMovingForward
+	;JNEG	StopTurning
 ; This is for possible cases where we don't need to change currTarg
 SetTargetHeading:
 	; assumes that the target angle is stored in currTarg
 	; set DVel to 0 just in case
 	LOAD	currTarg	
 	STORE	DTheta
-	LOADI	0
-	STORE	DVel
+	LOAD	closeEnough
+	JPOS	DontMoveFwd
+	LOAD	FSlow
+	STORE	DVel				; if not within 250, set DVel to FSlow (move forwards)
+;	LOADI	0
+;	STORE	DVel
 	JUMP	GoDoMvmt
+DontMoveFwd:
+	LOADI	0					; if within 250, stop moving forwards
+	OUT		LCD					; debug
+	STORE	DVel
 ; This is for when the sensors don't detect ANYTHING
 nothingDetected:
-	LOADI	&H1134
+	LOAD	tempConst
 	OUT		LCD
-	LOADI	0
-	STORE	DVel
+;	LOADI	0
+;	STORE	DVel
 	JUMP	GoDoMvmt	; not yet decided how to handle this case yet
-StopMovingForward:
-	LOADI	0
-	STORE	DVel
+StopTurning:
+;	LOADI	0
+;	STORE	DVel
 	JUMP SetTargetHeading
+StopDetect:
+	; the doNothing() code section
+	; eventually we'll replace this with
+	; a state change
+	JUMP	GoDoMvmt
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
-	checker:	 DW	&H0000
-	changeTheta: DW &H0000
-	sensor_num:	 DW &H0000
-	currTarg:	 DW &H0000
+	tempConst:	 DW &H1134
+	closeEnough: DW &H0000			; reset when we reset back to this state
+	stopIt:	 	 DW &H0000			; reset when we reset back to this state
+	checker:	 DW	&H0000			; reset when we reset back to this state
+	changeTheta: DW &H0000			; reset when we reset back to this state
+	sensor_num:	 DW &H0000	
+	currTarg:	 DW &H0000			; reset when we reset back to this state
 HandleTest3State:
 	; attempt to loop in a
 	; circle with 1/2 ft radius (293/2 = 146.5)
@@ -303,7 +325,57 @@ WeDoneMessedUp:
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
+VerifyRange:
+	LOADI	-1				;0xFFFF
+	OUT		LCD
+	LOAD	min
+	OUT		SSEG2
+	XOR		INTEGER_MAX
+	JZERO	doNothing
+	LOADI	250
+	SUB		min
+	JNEG	doNothing
+	LOADI	1
+	STORE	closeEnough
+doNothing:
+	RETURN
+VerifyHeading:
+	IN		DIST2
+	STORE	d2
+	;SUB		HalfFt
+	;JPOS	OverHalf
+	; Under half a foot away
+	IN		DIST3
+	SUB		d2
+	CALL	Abs
+	SUB		diff1
+	JNEG	setTrue
+	LOADI	0
+	STORE	stopIt
+	RETURN
+;OverHalf:
+;	IN		DIST3
+;	SUB		d2
+;	CALL	Abs
+;	SUB		diff2
+;	JNEG	setTrue
+;	LOADI	0
+;	STORE	stopIt
+;	RETURN 
+setTrue:
+	LOADI	1
+	STORE	stopIt
+	RETURN
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+	d2:		DW &H0000
+	diff1:	DW 90			; 90 mm diff
+	;diff2:	DW 75			; 75 mm diff
 	
+;; set sensor_num and min to -1 if nothing is detected
+;; else set sensor_num to closest sensor
+;; and min to min distance detected
 DetectReflector:
 	; only checks sensors 0-5 (we'll use rear sensors for moving away)
 	; start by initializing min = DIST0 and sensor_num = 0
@@ -394,7 +466,10 @@ setFail:
 	;***********************************************************
 	;* Local vars for this state
 	;***********************************************************
-	min:		DW &H0000
+	min:		DW &H7FFF			; set min to INT_MAX
+									; when we reset back to this state
+									; (detecting next reflector to loop)
+									; we need to reset min INTEGER_MAX
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
@@ -986,8 +1061,9 @@ FullMask: DW &HFFFF
 
 ; some useful movement values
 OneMeter:  DW 961       ; ~1m in 1.04mm units
-HalfMeter: DW 481      ; ~0.5m in 1.04mm units
-Ft1:	   DW 293	   ; ~1ft
+HalfMeter: DW 481       ; ~0.5m in 1.04mm units
+HalfFt:	   DW 147		; ~0.5ft
+Ft1:	   DW 293	    ; ~1ft
 Ft2:       DW 586       ; ~2ft in 1.04mm units
 Ft3:       DW 879
 Ft4:       DW 1172
