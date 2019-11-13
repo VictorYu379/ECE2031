@@ -77,12 +77,12 @@ Main:
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
-	LOADI	650
-	OUT	SONALARM		 ; write HalfMeter to SONALARM to set interrupt
+	LOADI	500
+	OUT		SONALARM		 ; write HalfMeter to SONALARM to set interrupt
 							 ; to alarm when reflector is within half meter
-	LOADI	&B00011110
-	OUT	SONARINT		 ; only enable the front and side sonars to interrupt
-	SEI	&B0001		 ; enable interrupts from source 1 (sonar)
+	LOADI	&B00111111
+	OUT		SONARINT		 ; only enable the front and side sonars to interrupt
+	SEI		&B0001		 ; enable interrupts from source 1 (sonar)
 	JUMP	GoStraight	 ; go straight indefinitely
 	
 GoStraight:				 ; Go straight with FSlow speed and current direction
@@ -95,14 +95,83 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
+CCNT:       DW 200
+OLDVAL:		DW 0	
+
 Circling:
+	IN 		TIMER
+	STORE   OLDVAL
+CIRCLELOOP:
+	IN		DIST5
+	SUB		Ft1
+	JNEG	DoLarge
 	LOAD	Eight
 	OUT		SSEG2
-	LOADI	500
+	LOADI   300
 	OUT     LVELCMD
-	LOADI	300
+	LOADI	180
 	OUT		RVELCMD
-	JUMP	Circling
+	JUMP	CheckTime
+DoLarge:
+	LOAD	Seven
+	OUT		SSEG2
+	LOADI   180
+	OUT     LVELCMD
+	LOADI	180
+	OUT		RVELCMD
+CheckTime:
+	IN		TIMER
+	SUB  	CCNT
+	SUB     OLDVAL
+	
+	OUT	    SSEG1
+	JNEG	CIRCLELOOP
+	
+	IN		DIST2
+	SUB		OneMeter
+	JNEG	OutLoop2
+	IN		DIST1
+	SUB		OneMeter
+	JNEG	OutLoop1
+	IN		DIST0
+	SUB		OneMeter
+	JNEG	OutLoop0
+
+	JUMP    CIRCLELOOP
+
+OutLoop2:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 12
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+
+OutLoop1:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 44
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+
+OutLoop0:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 90
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+
 
 ; InfLoop: 
 ; 	JUMP   InfLoop
@@ -129,25 +198,25 @@ Forever:
 
 
 SonarState:
-	DW		 &H0000
+	DW		&H0000
 Sonar_Int:
 	LOAD	Nine
 	OUT		SSEG2
-	LOAD	 Zero
-	OUT	 SONARINT	 ; close the interrupt during stopping
+	LOAD	Zero
+	OUT	 	SONARINT	 ; close the interrupt during stopping
 	LOAD	SonarState
-	JUMP	 StopBot		 ; State 0 is StopBot
+	JUMP	StopBot		 ; State 0 is StopBot
 State1:
 	JUMP  Closest		 ; State 1 is Closest
 State2:
 	JUMP  TurnToReflector		 ; State 2 is TurnToReflector
 State3:
-	JUMP  Turn90		 ; State 3 is Turn90
+	;JUMP  Turn90		 ; State 3 is Turn90
 State4:
 	JUMP  Circling
 End_Sonar_Int:
 	LOADI	 &B00111111	 
-	OUT	 SONARINT	 ; reopen the interrupt
+	OUT	 	 SONARINT	 ; reopen the interrupt
 	RETI
 
 ; 0. Stop the robot
@@ -233,38 +302,38 @@ SonarData:
 TurnTo2:
 ; Turn to the angle where head is pointing to the reflector
 	LOAD	 Zero
-	ADDI	 15
+	ADDI	 80
 	CALL   	 Mod360
 	STORE	 Angle		; prepare parameter for turning
 	JUMP	 Turn
 
 TurnTo3:
 	LOAD	 Zero
-	ADDI	 -15
+	ADDI	 75
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo1:
 	LOAD	 Zero
-	ADDI	 44
+	ADDI	 110
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo4:
 	LOAD	 Zero
-	ADDI	 -44
+	ADDI	 46
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo0:
 	LOAD	 Zero
-	ADDI	 90
+	ADDI	 180
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo5:
 	LOAD	 Zero
-	ADDI	 -90
+	ADDI	 0
 	STORE	 Angle
 	JUMP	 Turn
 
@@ -285,14 +354,13 @@ KeepTurning:
 	LOAD	 Angle				; load parameter into AC
 	STORE	 DTheta				; put desired angle to DTheta
 	LOAD	 FSlow
-	STORE	 DVel					; set desired speed to 0
+	STORE	 DVel				; set desired speed to FSlow
 	CALL	 ControlMovement	; call API
 	IN		 THETA				; read odometry
 	STORE	 Temp_THETA
 	LOAD	 Angle				; subtract parameter Angle
-	CALL	 Mod360
 	SUB		 Temp_THETA
-	CALL	 Abs				
+	CALL	 Abs
 	OUT		 SSEG1
 	;ADDI	 -3					; if the difference is bigger than 3 degrees
 	JPOS	 KeepTurning		; keep turning
@@ -308,12 +376,13 @@ Turn90:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 60
+	ADDI	 70
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
 ; Set next state to be state 4
 	JUMP	 State4
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	
 
 ; Timer ISR.  Currently just calls the movement control code.
