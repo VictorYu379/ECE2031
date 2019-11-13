@@ -166,6 +166,8 @@ HandleTest2State:
 	JPOS	StopDetect			
 	; added a precheck just in case -- eventually this can be taken out
 	; through use of a state change at StopDetect
+	; put the range check up here since it should be a precheck
+	CALL	VerifyRange			; check how close we are
 	LOAD	closeEnough			; 0 if too far, 1 if <= 250
 	JZERO	SkipHeadingCheck	; if not within 250, skip the Heading Check
 	CALL	VerifyHeading
@@ -186,7 +188,8 @@ SkipHeadingCheck:
 	JNEG	nothingDetected
 	; otherwise, figure out which sensor detected stuff
 	; and do necessary checks
-	CALL	VerifyRange			; check how close we are
+	;; original spot
+	; CALL	VerifyRange			; check how close we are
 Check:
 	LOAD	sensor_num
 	;OUT		LCD					; debug
