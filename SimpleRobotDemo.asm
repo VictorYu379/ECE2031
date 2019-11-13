@@ -162,6 +162,10 @@ HandleTest2State:
 	;; excluding certain sensors (6 and 7)
 	;; if remaining distance is < 1 ft set DVel to 0
 	;; do every 1 seconds
+	LOAD	stopIt				
+	JPOS	StopDetect			
+	; added a precheck just in case -- eventually this can be taken out
+	; through use of a state change at StopDetect
 	LOAD	closeEnough			; 0 if too far, 1 if <= 250
 	JZERO	SkipHeadingCheck	; if not within 250, skip the Heading Check
 	CALL	VerifyHeading
