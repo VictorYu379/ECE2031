@@ -95,20 +95,31 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
-CCNT:       DW 150
+CCNT:       DW 200
 OLDVAL:		DW 0	
 
 Circling:
 	IN 		TIMER
 	STORE   OLDVAL
 CIRCLELOOP:
+	IN		DIST5
+	SUB		Ft1
+	JNEG	DoLarge
 	LOAD	Eight
 	OUT		SSEG2
 	LOADI   300
 	OUT     LVELCMD
-	LOADI	170
+	LOADI	180
 	OUT		RVELCMD
-	
+	JUMP	CheckTime
+DoLarge:
+	LOAD	Seven
+	OUT		SSEG2
+	LOADI   180
+	OUT     LVELCMD
+	LOADI	180
+	OUT		RVELCMD
+CheckTime:
 	IN		TIMER
 	SUB  	CCNT
 	SUB     OLDVAL
@@ -116,7 +127,51 @@ CIRCLELOOP:
 	OUT	    SSEG1
 	JNEG	CIRCLELOOP
 	
-	JUMP    End_Sonar_Int
+	IN		DIST2
+	SUB		OneMeter
+	JNEG	OutLoop2
+	IN		DIST1
+	SUB		OneMeter
+	JNEG	OutLoop1
+	IN		DIST0
+	SUB		OneMeter
+	JNEG	OutLoop0
+
+	JUMP    CIRCLELOOP
+
+OutLoop2:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 12
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+
+OutLoop1:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 44
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+
+OutLoop0:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 90
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+
 
 ; InfLoop: 
 ; 	JUMP   InfLoop
@@ -156,13 +211,55 @@ State1:
 State2:
 	JUMP  TurnToReflector		 ; State 2 is TurnToReflector
 State3:
+	JUMP  CHECKWALL
+State35:
 	JUMP  Turn90		 ; State 3 is Turn90
 State4:
 	JUMP  Circling
 End_Sonar_Int:
-	LOADI	 &B00001111	 
+	LOADI	 &B00111111	 
 	OUT	 	 SONARINT	 ; reopen the interrupt
 	RETI
+	
+MAXVALUE:	 DW &H7FFF
+TEMPCNT:     DW 0
+CHECKWALL:
+	LOADI    0
+	STORE    TEMPCNT
+	IN       DIST1
+	SUB      MAXVALUE
+	JZERO    NEXT1
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT1:
+	IN       DIST2
+	SUB      MAXVALUE
+	JZERO	 NEXT2
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT2:
+	IN       DIST3
+	SUB      MAXVALUE
+	JZERO	 NEXT3
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT3:
+	IN       DIST4
+	SUB      MAXVALUE
+	JZERO	 NEXT4
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT4:
+	LOAD     TEMPCNT
+	ADDI     -4
+	JNEG     State35
+	
+	CALL     TURN180
+	JUMP     End_Sonar_Int
 
 ; 0. Stop the robot
 StopBot:
@@ -247,38 +344,38 @@ SonarData:
 TurnTo2:
 ; Turn to the angle where head is pointing to the reflector
 	LOAD	 Zero
-	ADDI	 15
+	ADDI	 80
 	CALL   	 Mod360
 	STORE	 Angle		; prepare parameter for turning
 	JUMP	 Turn
 
 TurnTo3:
 	LOAD	 Zero
-	ADDI	 -15
+	ADDI	 75
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo1:
 	LOAD	 Zero
-	ADDI	 44
+	ADDI	 110
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo4:
 	LOAD	 Zero
-	ADDI	 -44
+	ADDI	 46
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo0:
 	LOAD	 Zero
-	ADDI	 90
+	ADDI	 180
 	STORE	 Angle
 	JUMP	 Turn
 
 TurnTo5:
 	LOAD	 Zero
-	ADDI	 -90
+	ADDI	 0
 	STORE	 Angle
 	JUMP	 Turn
 
@@ -299,14 +396,13 @@ KeepTurning:
 	LOAD	 Angle				; load parameter into AC
 	STORE	 DTheta				; put desired angle to DTheta
 	LOAD	 FSlow
-	STORE	 DVel					; set desired speed to 0
+	STORE	 DVel				; set desired speed to FSlow
 	CALL	 ControlMovement	; call API
 	IN		 THETA				; read odometry
 	STORE	 Temp_THETA
 	LOAD	 Angle				; subtract parameter Angle
-	CALL	 Mod360
 	SUB		 Temp_THETA
-	CALL	 Abs				
+	CALL	 Abs
 	OUT		 SSEG1
 	;ADDI	 -3					; if the difference is bigger than 3 degrees
 	JPOS	 KeepTurning		; keep turning
@@ -328,6 +424,21 @@ Turn90:
 	CALL	 KeepTurning
 ; Set next state to be state 4
 	JUMP	 State4
+	
+	
+TURN180:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 180
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+; Set next state to be state 4
+	RETURN
+	
+	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	
 
