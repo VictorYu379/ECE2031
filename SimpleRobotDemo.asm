@@ -102,6 +102,14 @@ Circling:
 	IN 		TIMER
 	STORE   OLDVAL
 CIRCLELOOP:
+	IN 		DIST2
+	SUB     150
+	JNEG    FINWALL
+	
+	IN      DIST3
+	SUB     150
+	JNEG    FINWALL
+
 	IN		DIST5
 	SUB		Ft1
 	JNEG	DoLarge
@@ -112,6 +120,7 @@ CIRCLELOOP:
 	LOADI	180
 	OUT		RVELCMD
 	JUMP	CheckTime
+	
 DoLarge:
 	LOAD	Seven
 	OUT		SSEG2
@@ -138,6 +147,7 @@ CheckTime:
 	JNEG	OutLoop0
 
 	JUMP    CIRCLELOOP
+	
 
 OutLoop2:
 ; Reset absolute angle odometry to 0
@@ -171,6 +181,10 @@ OutLoop0:
 ; Turn until desired angle met
 	CALL	 KeepTurning
 	JUMP	 End_Sonar_Int
+	
+FINWALL:
+	CALL     TURN180
+	JUMP     End_Sonar_Int
 
 
 ; InfLoop: 
@@ -211,8 +225,6 @@ State1:
 State2:
 	JUMP  TurnToReflector		 ; State 2 is TurnToReflector
 State3:
-	JUMP  CHECKWALL
-State35:
 	JUMP  Turn90		 ; State 3 is Turn90
 State4:
 	JUMP  Circling
@@ -221,42 +233,44 @@ End_Sonar_Int:
 	OUT	 	 SONARINT	 ; reopen the interrupt
 	RETI
 	
-MAXVALUE:	 DW &H7FFF
+	
+MAXVALUE:	 DW 500
 TEMPCNT:     DW 0
 CHECKWALL:
 	LOADI    0
 	STORE    TEMPCNT
 	IN       DIST1
 	SUB      MAXVALUE
-	JZERO    NEXT1
+	JPOS     NEXT1
 	LOAD     TEMPCNT
 	ADDI     1
 	STORE    TEMPCNT
 NEXT1:
 	IN       DIST2
 	SUB      MAXVALUE
-	JZERO	 NEXT2
+	JPOS	 NEXT2
 	LOAD     TEMPCNT
 	ADDI     1
 	STORE    TEMPCNT
 NEXT2:
 	IN       DIST3
 	SUB      MAXVALUE
-	JZERO	 NEXT3
+	JPOS	 NEXT3
 	LOAD     TEMPCNT
 	ADDI     1
 	STORE    TEMPCNT
 NEXT3:
 	IN       DIST4
 	SUB      MAXVALUE
-	JZERO	 NEXT4
+	JPOS	 NEXT4
 	LOAD     TEMPCNT
 	ADDI     1
 	STORE    TEMPCNT
 NEXT4:
 	LOAD     TEMPCNT
 	ADDI     -4
-	JNEG     State35
+	JZERO    State3
+	JNEG     State3
 	
 	CALL     TURN180
 	JUMP     End_Sonar_Int
