@@ -8,8 +8,8 @@
 ; The ISR jump table is located in mem 0-4.  See manual for details.
 ORG 0
 	JUMP   Init        ; Reset vector
-	RETI               ; Sonar interrupt (unused)
-	JUMP   CTimer_ISR  ; Timer interrupt
+	JUMP   Sonar_Int   ; Sonar interrupt (unused)
+	RETI			   ; Timer interrupt
 	RETI               ; UART interrupt (unused)
 	RETI               ; Motor stall interrupt (unused)
 
@@ -24,13 +24,15 @@ Init:
 	OUT    RVELCMD
 	STORE  DVel        ; Reset API variables
 	STORE  DTheta
-	OUT    SONAREN     ; Disable sonar (optional)
+	;OUT    SONAREN     ; Disable sonar (optional)
 	OUT    BEEP        ; Stop any beeping (optional)
-	
 	CALL   SetupI2C    ; Configure the I2C to read the battery voltage
 	CALL   BattCheck   ; Get battery voltage (and end if too low).
 	OUT    LCD         ; Display battery voltage (hex, tenths of volts)
-	
+	; Enable all sonar
+	LOAD   FullMask
+	OUT	   SONAREN
+
 WaitForSafety:
 	; This loop will wait for the user to toggle SW17.  Note that
 	; SCOMP does not have direct access to SW17; it only has access
@@ -60,334 +62,146 @@ WaitForUser:
 	LOAD   Zero
 	OUT    XLEDS       ; clear LEDs once ready to continue
 
-
-
-
 ;***************************************************************
 ;* Main code
 ;***************************************************************
-
 Main:
 	OUT    RESETPOS    ; reset the odometry to 0,0,0
 	; configure timer interrupt for the movement control code
-	LOADI  10          ; period = (10 ms * 10) = 0.1s, or 10Hz.
-	OUT    CTIMER      ; turn on timer peripheral
-	SEI    &B0010      ; enable interrupts from source 2 (timer)
+	; LOADI  10          ; period = (10 ms * 10) = 0.1s, or 10Hz.
+	; OUT    CTIMER      ; turn on timer peripheral
+	; SEI    &B0010      ; enable interrupts from source 2 (timer)
+	; LOADI  0
+	; STORE  STATE		 ; reset STATE to 0
 	; at this point, timer interrupts will be firing at 10Hz, and
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
+	LOADI	350
+	OUT		SONALARM		 ; write HalfMeter to SONALARM to set interrupt
+							 ; to alarm when reflector is within half meter
+	LOADI	&B00111111
+	OUT		SONARINT		 ; only enable the front and side sonars to interrupt
+	SEI		&B0001		 ; enable interrupts from source 1 (sonar)
+	JUMP	GoStraight	 ; go straight indefinitely
 	
-	
-	LOADI   0
-	STORE 	MotionCTR
+GoStraight:				 ; Go straight with FSlow speed and current direction
+	LOAD	Ten
+	OUT		SSEG2
+	LOAD	FMid
+	STORE	DVel
+	IN		THETA
+	STORE	DTheta
+	CALL	ControlMovement
+	JUMP	GoStraight
 
-	;LOADI	32
-	LOADI	FRONTMask	;0-5
-	OUT		SONAREN
-	
-	LOADI	0
-	OUT		TIMER
+CCNT:       DW 90
+OLDVAL:		DW 0	
+RCNT:       DW 10
 
-	;LOAD 	FSlow
-	;STORE   DVel
-	;OUT		LVELCMD
-	;OUT 	RVELCMD
-
-	; LOADI  90
-	; STORE  DTheta      ; use API to get robot to face 90 degrees
-	;CALL LookForThings
-	;LOAD	Distance
-	;OUT		SSEG1
-	;LOAD	TarAng
-	;OUT 	SSEG2
-	
-	;IN  	TIMER
-	;ADD     ONESECOND
-	;STORE	SleepCTR
-	;CALL 	Sleep
-	;JUMP	MoveForward
-	JUMP 	TEST
-
-TEST:						; testing logic
-	;LOADI   1000
-	;STORE	Distance
-	;CALL	DistanceToCounter
-	;LOAD	FCnt
-	;OUT 	LCD
-	;IN		TIMER
-	;ADD	FCnt
-	;STORE	FCnt
-	
-
-	CALL	LookForForward
-	
-	;IN  	TIMER
-	;ADD     ONESECOND
-	;STORE	SleepCTR
-	;CALL	Sleep
-	
-	LOAD 	Distance
-	OUT		LCD
-	ADDI	DISCONST
-	;OUT		LCD
-	JPOS	checkRight
-	
-	
-	LOADI   1
-	OUT		SSEG1
-	IN		TIMER
-	ADD 	NCnt
-	STORE   ACnt
-	CALL    TURN90
-	
+Circling:
 	IN 		TIMER
-	ADD		CCnt
-	STORE	ACnt
-	CALL	CircleLoopLeft
-	JUMP	TEST
-	
-checkRight:
-	CALL	LookForRight
-	
-	
-	;IN  	TIMER
-	;ADD     ONESECOND
-	;STORE	SleepCTR
-	;CALL	Sleep
-	
-	LOAD 	Distance
-	ADDI	DISCONST
-	OUT		LCD
-	JPOS	checkLeft
-	
-	;IN		TIMER
-	;ADD 	NCnt
-	;STORE   ACnt
-	;CALL    TURN90
-	
-	LOADI   2
-	OUT		SSEG1
-	
-	IN 		TIMER
-	ADD		CCnt
-	STORE	ACnt
-	CALL	CircleLoopRight
-	JUMP	TEST
-	
-checkLeft:
-	CALL	LookForLeft
-	
-	LOAD 	Distance
-	ADDI	DISCONST
-	OUT		LCD
-	JPOS	continue
-	;IN  	TIMER
-	;ADD     ONESECOND
-	;STORE	SleepCTR
-	;CALL	Sleep
-
-	
-	;IN		TIMER
-	;ADD 	NCnt
-	;STORE   ACnt
-	;CALL    TURN90
-	
-	LOADI   3
-	OUT		SSEG1
-	
-	IN 		TIMER
-	ADD		CCnt
-	STORE	ACnt
-	CALL	CircleLoopLeft
-	JUMP	TEST
-
-	
-Continue:
-	;IN		TIMER
-	;ADD 	NCnt
-	;STORE   ACnt
-	;CALL    TURN90
-	
-	;IN 		TIMER
-	;ADD		CCnt
-	;STORE	ACnt
-	;CALL	CircleLoop
-	
+	STORE   OLDVAL
+REVERSELOOP:
+	LOADI   -200
+	OUT     LVELCMD
+	OUT     RVELCMD
+	IN      TIMER
+	SUB     OLDVAL
+	SUB     RCNT
+	JNEG    REVERSELOOP
 	
 	IN      TIMER
-	ADDI	10				; test with a constant first
-	STORE	FCnt
-	CALL    MoveForward
-
+	STORE   OLDVAL
+		
+CIRCLELOOP:
+	;IN 		DIST2
+	;SUB     150
+	;JNEG    FINWALL
 	
-	JUMP 	TEST
-	;JUMP 	Die
-	
-Sleep:
-	IN 		TIMER
-	SUB		SleepCTR
-	JNEG	Sleep
-	RETURN
+	;IN      DIST3
+	;SUB     150
+	;JNEG    FINWALL
 
-CheckValid:					; to be updated
-	JUMP	CheckValid
-
-MoveForward:				; Fcnt is the target timeer reading
-	LOAD 	FMid
-	OUT		LVELCMD
-	LOAD	FMid
+	IN		DIST5
+	SUB		200
+	JNEG	DoLarge
+	LOAD	Eight
+	OUT		SSEG2
+	LOADI   500
+	OUT     LVELCMD
+	LOADI	290
 	OUT		RVELCMD
+	JUMP	CheckTime
+	
+DoLarge:
+	LOAD	Seven
+	OUT		SSEG2
+	LOADI   100
+	OUT     LVELCMD
+	LOADI	100
+	OUT		RVELCMD
+CheckTime:
 	IN		TIMER
-	OUT		LCD
-	SUB 	FCnt
-	;OUT		SSEG2
-	;JUMP	MoveForward
-	JNEG	MoveForward
-	LOADI	0
-	OUT		SSEG2			; stop motor
+	SUB  	CCNT
+	SUB     OLDVAL
 	
-	LOAD 	ZERO
-	OUT		LVELCMD
-	LOAD	ZERO
-	OUT		RVELCMD
-	RETURN 
+	OUT	    SSEG1
+	JNEG	CIRCLELOOP
+	
+	IN		DIST2
+	SUB		OneMeter
+	JNEG	OutLoop2
+	IN		DIST1
+	SUB		OneMeter
+	JNEG	OutLoop1
+	IN		DIST0
+	SUB		OneMeter
+	JNEG	OutLoop0
 
-
-CircleLoopLeft:					; Do a circle
-	LOAD 	RSpeed
-	OUT		RVELCMD
-	LOAD	LSpeed
-	OUT		LVELCMD
-	IN		TIMER	
-	SUB 	ACnt
-	OUT		SSEG2
-	;JUMP	MoveForward
-	JNEG	CircleLoopLeft
-	LOADI	0
-	OUT		SSEG2		; stop motor
-	
-	LOAD 	ZERO
-	OUT		LVELCMD
-	LOAD	ZERO
-	OUT		RVELCMD
-	RETURN 
-	
-CircleLoopRight:					; Do a circle
-	LOAD 	LSpeed
-	OUT		RVELCMD
-	LOAD	RSpeed
-	OUT		LVELCMD
-	IN		TIMER	
-	SUB 	ACnt
-	OUT		SSEG2
-	;JUMP	MoveForward
-	JNEG	CircleLoopRight
-	LOADI	0
-	OUT		SSEG2		; stop motor
-	
-	LOAD 	ZERO
-	OUT		LVELCMD
-	LOAD	ZERO
-	OUT		RVELCMD
-	RETURN 
-
-TURN90:
-	LOAD 	LSpeed
-	OUT		LVELCMD	
-	LOADI	0
-	OUT		RVELCMD
-	IN		TIMER	
-	SUB 	ACnt
-	OUT		SSEG2
-	;JUMP	MoveForward
-	JNEG	TURN90
-	LOADI	0
-	OUT		SSEG2		; stop motor
-	
-	LOAD 	ZERO
-	OUT		LVELCMD
-	LOAD	ZERO
-	OUT		RVELCMD
-	RETURN 
-
-TURNDeg:					; Turn to any degree
-	LOAD	TarAng
-	STORE	DTheta
-	ADD		CurAng
-	STORE	CurAng
-	RETURN
-
-UpdateOdometry:
-	;JUMP UpdateOdometry	to be implemented
-	RETURN
-
-DistanceToCounter:
-	Load  Distance
-	STORE d16sN
-	Load  CtrConst
-	STORE d16sD
-	CALL  Div16s
-	Load  dres16sQ
-	STORE FCnt
-	Load  dres16sR
-	SUB	  CtrHalf
-	JNEG  NoAdj			;round distance/ctrconst to the nearest integer
-	JZERO NoAdj
-	LOAD  FCnt
-	Add   1
-	Store FCnt
-NoAdj:
-	OUT LCD
-	RETURN
-
-LookForForward: 
-	LOADI  0
-	STORE  Distance
-	IN	   DIST2
-	ADD    Distance
-	IN	   DIST3
-	ADD    Distance
-	STORE Distance
-	RETURN
-	
-LookForLeft: 
-	LOADI  0
-	STORE  Distance
-	IN	   DIST0
-	ADD    Distance
-	IN	   DIST1
-	ADD    Distance
-	STORE Distance
-	RETURN
-	
-	
-LookForRight: 
-	LOADI  0
-	STORE  Distance
-	IN	   DIST4
-	ADD    Distance
-	IN	   DIST5
-	ADD    Distance
-	STORE Distance
-	RETURN
-	
+	JUMP    CIRCLELOOP
 	
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;; End of our code ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+OutLoop2:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 12
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
 
-TurnLoop:
-	IN     Theta
-	ADDI   -90
-	CALL   Abs         ; get abs(currentAngle - 90)
-	ADDI   -3
-	JPOS   TurnLoop    ; if angle error > 3, keep checking
-	; at this point, robot should be within 3 degrees of 90
-	LOAD   FMid
-	STORE  DVel        ; use API to move forward
+OutLoop1:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 44
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
 
-InfLoop: 
-	JUMP   InfLoop
+OutLoop0:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 90
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+	JUMP	 End_Sonar_Int
+	
+FINWALL:
+	CALL     TURN180
+	JUMP     End_Sonar_Int
+
+
+; InfLoop: 
+; 	JUMP   InfLoop
 	; note that the movement API will still be running during this
 	; infinite loop, because it uses the timer interrupt, so the
 	; robot will continue to attempt to match DTheta and DVel
@@ -407,26 +221,355 @@ Die:
 	OUT    SSEG2       ; "dEAd" on the sseg
 Forever:
 	JUMP   Forever     ; Do this forever.
+	DEAD:  DW &HDEAD   ; Example of a "local" variable
 
-; VARS
-DEAD:      DW &HDEAD   ; Example of a "local" variable
-MotionCTR: DW &H0000
-ABSY:      DW &H0000
-ABSX:      DW &H0000
-CurAng:    DW &H0000
-Distance:  DW &H0000
-TarAng:    DW &H0000
-SleepCTR:  DW &H0000
-FCnt:	   DW &H0000
-ACnt:	   DW &H0000
+
+SonarState:
+	DW		&H0000
+Sonar_Int:
+	LOAD	Nine
+	OUT		SSEG2
+	LOAD	Zero
+	OUT	 	SONARINT	 ; close the interrupt during stopping
+	LOAD	SonarState
+	JUMP	StopBot		 ; State 0 is StopBot
+State1:
+	JUMP  Closest		 ; State 1 is Closest
+State2:
+	JUMP  TurnToReflector		 ; State 2 is TurnToReflector
+State3:
+;	JUMP  Turn90		 ; State 3 is Turn90
+State4:
+	JUMP  Circling
+End_Sonar_Int:
+	LOADI	 &B00111111	 
+	OUT	 	 SONARINT	 ; reopen the interrupt
+	RETI
+	
+	
+MAXVALUE:	 DW 500
+TEMPCNT:     DW 0
+CHECKWALL:
+	LOADI    0
+	STORE    TEMPCNT
+	IN       DIST1
+	SUB      MAXVALUE
+	JPOS     NEXT1
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT1:
+	IN       DIST2
+	SUB      MAXVALUE
+	JPOS	 NEXT2
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT2:
+	IN       DIST3
+	SUB      MAXVALUE
+	JPOS	 NEXT3
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT3:
+	IN       DIST4
+	SUB      MAXVALUE
+	JPOS	 NEXT4
+	LOAD     TEMPCNT
+	ADDI     1
+	STORE    TEMPCNT
+NEXT4:
+	LOAD     TEMPCNT
+	ADDI     -4
+	JZERO    State3
+	JNEG     State3
+	
+	CALL     TURN180
+	JUMP     End_Sonar_Int
+
+; 0. Stop the robot
+StopBot:
+	LOAD	 Zero
+	STORE	 DVel			 ; set speed to 0
+	CALL	 ControlMovement
+	IN	 	 LVEL		 ; read in odometry data
+	SUB	 Ten			 ; check whether it's above 10
+	JPOS	 StopBot		 ; if it's not slow enough, keep stopping the robot
+	JUMP	 State1
+
+; 1. Pick out the closest reflector
+Closest:
+	IN		 DIST0
+	STORE	 MinValue	 ; give out AC for next reading
+	IN		 DIST1
+	SUB	 MinValue	 ; DIST1 - MinValue
+	JPOS	 ReadSonar2
+	ADD	 MinValue
+	STORE	 MinValue	 ; Update MinValue
+	LOADI	 1
+	STORE  MinIndex	 ; Update MinIndex
+ReadSonar2:
+	IN		 DIST2
+	SUB	 MinValue	 ; DIST2 - MinValue
+	JPOS	 ReadSonar3
+	ADD	 MinValue
+	STORE	 MinValue	 ; Update MinValue
+	LOADI	 2
+	STORE  MinIndex	 ; Update MinIndex
+ReadSonar3:
+	IN		 DIST3
+	SUB	 MinValue	 ; DIST3 - MinValue
+	JPOS	 ReadSonar4
+	ADD	 MinValue
+	STORE	 MinValue	 ; Update MinValue
+	LOADI	 3
+	STORE  MinIndex	 ; Update MinIndex
+ReadSonar4:
+	IN		 DIST4
+	SUB	 MinValue	 ; DIST4 - MinValue
+	JPOS	 ReadSonar5
+	ADD	 MinValue
+	STORE	 MinValue	 ; Update MinValue
+	LOADI	 4
+	STORE  MinIndex	 ; Update MinIndex
+ReadSonar5:
+	IN		 DIST5
+	SUB	 MinValue	 ; DIST5 - MinValue
+	JUMP	 State2
+	ADD	 MinValue
+	STORE	 MinValue	 ; Update MinValue
+	LOADI	 5
+	STORE  MinIndex	 ; Update MinIndex
+	JUMP	 State2
+MinValue:
+	DW		 &H0000
+MinIndex:
+	DW		 &H0000
+
+; 2. Turn to the closest reflector
+TurnToReflector:
+	LOAD	 MinIndex	 ; load the index of the sonar with closest reflector
+	OUT    SSEG1
+	JZERO	 TurnTo0
+	ADDI	 -1
+	JZERO  TurnTo1
+	ADDI	 -1
+	JZERO  TurnTo2
+	ADDI	 -1
+	JZERO  TurnTo3
+	ADDI	 -1
+	JZERO  TurnTo4
+	ADDI	 -1
+	JZERO  TurnTo5
+; If out of bound, JUMP back
+	JUMP	 State3
+
+SonarData:
+	DW		 &H0000
+
+TurnTo2:
+; Turn to the angle where head is pointing to the reflector
+	LOAD	 Zero
+	ADDI	 80
+	CALL   	 Mod360
+	STORE	 Angle		; prepare parameter for turning
+	JUMP	 Turn
+
+TurnTo3:
+	LOAD	 Zero
+	ADDI	 75
+	STORE	 Angle
+	JUMP	 Turn
+
+TurnTo1:
+	LOAD	 Zero
+	ADDI	 110
+	STORE	 Angle
+	JUMP	 Turn
+
+TurnTo4:
+	LOAD	 Zero
+	ADDI	 46
+	STORE	 Angle
+	JUMP	 Turn
+
+TurnTo0:
+	LOAD	 Zero
+	ADDI	 180
+	STORE	 Angle
+	JUMP	 Turn
+
+TurnTo5:
+	LOAD	 Zero
+	ADDI	 0
+	STORE	 Angle
+	JUMP	 Turn
+
+Turn:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 	 THETA
+; Turn until desired angle met
+	CALL	 KeepTurning
+; End this interrupt
+	LOAD	 Three
+	STORE	 SonarState	 ; set next state to be state 3
+	JUMP	 State3
+
+KeepTurning:
+	LOAD	 MinIndex
+	OUT		 SSEG2
+	LOAD	 Angle				; load parameter into AC
+	STORE	 DTheta				; put desired angle to DTheta
+	LOAD	 FSlow
+	STORE	 DVel				; set desired speed to FSlow
+	CALL	 ControlMovement	; call API
+	IN		 THETA				; read odometry
+	STORE	 Temp_THETA
+	LOAD	 Angle				; subtract parameter Angle
+	SUB		 Temp_THETA
+	CALL	 Abs
+	OUT		 SSEG1
+	;ADDI	 -3					; if the difference is bigger than 3 degrees
+	JPOS	 KeepTurning		; keep turning
+	RETURN						; otherwise, return
+; Local variable for KeepTurning
+Angle:
+	DW		 &H0000
+Temp_THETA:
+	DW		 &H0000
+	
+Turn90:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 70
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+; Set next state to be state 4
+	JUMP	 State4
+	
+	
+TURN180:
+; Reset absolute angle odometry to 0
+	LOAD	 Zero
+	OUT	 THETA
+; Set the angle to turn as 90
+	ADDI	 180
+	STORE	 Angle
+; Turn until desired angle met
+	CALL	 KeepTurning
+; Set next state to be state 4
+	RETURN
+	
+	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	
 
 ; Timer ISR.  Currently just calls the movement control code.
 ; You could, however, do additional tasks here if desired.
 CTimer_ISR:
-	;CALL    ControlMovement
+	; check state then let that state handle movement variables
+	LOAD	STATE
+	XOR		TEST1
+	JZERO	HandleTest1State
+	XOR		TEST2
+	JZERO	HandleTest2State
+	XOR TEST3
+	JZERO	HandleTest3State
+GoDoMvmt:
+	CALL   ControlMovement
 	RETI   ; return from ISR
-	
-	
+
+HandleTest1State:
+	; move for three seconds then stop for one second
+	LOAD	counter			; read counter
+	ADDI	1				; increment counter
+	STORE	counter
+	ADDI 	-30				; check if we've hit 30 (3 seconds)
+	JNEG	SkipThis		; if not, keep moving
+	ADDI	-10				; check if we've hit 10 (1 second) 	
+	JNEG	SetVel0			; if not, don't reset our counter
+	AND		0				
+	STORE	counter			; reset counter if so
+; set movement velocity to 0 (stop)
+SetVel0:
+	AND		0				; get zero in case AC isn't zero before
+	STORE 	DVel
+	JUMP GoDoMvmt			; let the MoveAPI do all our heavy lifting
+SkipThis:					; move forward slowly
+	LOAD	FSlow
+	STORE	DVel
+	JUMP	GoDoMvmt		; let the MoveAPI do all our heavy lifting
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+	counter:	DW &H0000
+HandleTest2State:
+	; check for an obstacle within four feet (straight ahead)
+	; if so, stop for one second
+	;     then turn until the correct direction
+	;     if so, stop for one second
+	;     then proceed until within 1 foot
+	; otherwise keep moving forward
+	; checks sensors 0-5 in order (not the back two for now)
+	;; eventually we should change this to a helper function that returns
+	;; which sensor detects something closest
+	;; excluding certain sensors
+	LOAD	DIST0
+	SUB		Ft4
+	JNEG	Set90
+	JUMP	Check1
+Set90:
+	LOADI	90
+	JUMP	SetTargetAngle
+Check1:
+	LOAD	DIST1
+	SUB		Ft4
+	LOADI	44
+	JUMP	SetTargetAngle
+	LOAD	DIST2
+	SUB		Ft4
+	LOADI	12
+	JUMP	SetTargetAngle
+	LOAD	DIST3
+	SUB		Ft4
+	LOADI	-12
+	JUMP	SetTargetAngle
+	LOAD	DIST4
+	SUB		Ft4
+	LOADI	-44
+	JUMP	SetTargetAngle
+	LOAD	DIST5
+	SUB		Ft4
+	LOADI	-90
+
+SetTargetAngle:
+	; assumes that the target change in angle is currently in AC
+	ADD		THETA
+	STORE	currTarg
+
+SetTargetHeading:
+	; assumes that the target value is stored in currTarg
+	LOAD	currTarg	
+	STORE	DTheta
+	JUMP	GoDoMvmt
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+	currTarg:	DW &H0000
+	counter1:	DW &H0000
+	counter2:	DW &H0000
+HandleTest3State:
+	; circle with 1ft radius
+	JUMP GoDoMvmt
+	;***********************************************************
+	;* Local vars for this state
+	;***********************************************************
+
 ; Control code.  If called repeatedly, this code will attempt
 ; to control the robot to face the angle specified in DTheta
 ; and match the speed specified in DVel
@@ -696,7 +839,7 @@ A2cd:       DW 14668    ; = 180/pi with 8 fractional bits
 ; Written by Kevin Johnson.  No licence or copyright applied.
 ; Warning: does not work with factor B = -32768 (most-negative number).
 ; To use:
-; - STORE factors in m16sA and m16sB.
+; - Store factors in m16sA and m16sB.
 ; - Call Mult16s
 ; - Result is stored in mres16sH and mres16sL (high and low words).
 ;*******************************************************************************
@@ -751,7 +894,7 @@ mres16sH: DW 0 ; result high
 ; Written by Kevin Johnson.  No licence or copyright applied.
 ; Warning: results undefined if denominator = 0.
 ; To use:
-; - STORE numerator in d16sN and denominator in d16sD.
+; - Store numerator in d16sN and denominator in d16sD.
 ; - Call Div16s
 ; - Result is stored in dres16sQ and dres16sR (quotient and remainder).
 ; Requires Abs subroutine
@@ -825,7 +968,7 @@ dres16sR: DW 0 ; remainder result
 ; Warning: this is *not* an exact function.  I think it's most wrong
 ; on the axes, and maybe at 45 degrees.
 ; To use:
-; - STORE X and Y offset in L2X and L2Y.
+; - Store X and Y offset in L2X and L2Y.
 ; - Call L2Estimate
 ; - Result is returned in AC.
 ; Result will be in same units as inputs.
@@ -971,7 +1114,17 @@ I2CError:
 ;***************************************************************
 ;* Variables
 ;***************************************************************
-Temp:     DW 0 ; "Temp" is not a great name, but can be useful
+Temp:     	DW 0 ; "Temp" is not a great name, but can be useful
+PositionX: 	DW &H0000
+PositionY: 	DW &H0000
+STATE:		DW &H0000	; STATE variable -- track the main state
+
+;***************************************************************
+;* States
+;***************************************************************
+TEST1:		DW &B00000000
+TEST2:		DW &B00000001
+TEST3:		DW &B00000010
 
 ;***************************************************************
 ;* Constants
@@ -1003,44 +1156,25 @@ Mask6:    DW &B01000000
 Mask7:    DW &B10000000
 LowByte:  DW &HFF      ; binary 00000000 1111111
 LowNibl:  DW &HF       ; 0000 0000 0000 1111
+FullMask: DW &HFFFF
 
 ; some useful movement values
-OneMeter: DW 961       ; ~1m in 1.04mm units
+OneMeter:  DW 961       ; ~1m in 1.04mm units
 HalfMeter: DW 481      ; ~0.5m in 1.04mm units
-Ft2:      DW 586       ; ~2ft in 1.04mm units
-Ft3:      DW 879
-Ft4:      DW 1172
-Deg90:    DW 90        ; 90 degrees in odometer units
-Deg180:   DW 180       ; 180
-Deg270:   DW 270       ; 270
-Deg360:   DW 360       ; can never actually happen; for math only
-FSlow:    DW 100       ; 100 is about the lowest velocity value that will move
-RSlow:    DW -100
-FMid:     DW 350       ; 350 is a medium speed
-RMid:     DW -350
-FFast:    DW 500       ; 500 is almost max speed (511 is max)
-RFast:    DW -500
-
-; CONST
-LSpeed:		DW 180
-RSpeed: 	DW 350
-NCnt:		DW 12
-CCnt:		DW 70
-CtrConst:	DW 35
-CtrHalf:	DW 17
-ALLMask:	DW &B11111111
-FRONTMask:    DW &B00111111
-S0A:        DW 90
-S1A:        DW 44
-S2A:    	DW 12
-S3A:    	DW -12
-S4A:     	DW -44
-S5A:     	DW -90
-S6A:     	DW -144
-S7A:     	DW 144
-ONESECOND:  DW 10
-DISCONST:	DW -500
-
+Ft1:	   DW 293	   ; ~1ft
+Ft2:       DW 586       ; ~2ft in 1.04mm units
+Ft3:       DW 879
+Ft4:       DW 1172
+Deg90:     DW 90        ; 90 degrees in odometer units
+Deg180:    DW 180       ; 180
+Deg270:    DW 270       ; 270
+Deg360:    DW 360       ; can never actually happen; for math only
+FSlow:     DW 100       ; 100 is about the lowest velocity value that will move
+RSlow:     DW -100
+FMid:      DW 250       ; 350 is a medium speed
+RMid:      DW -350
+FFast:     DW 500       ; 500 is almost max speed (511 is max)
+RFast:     DW -500
 
 MinBatt:  DW 140       ; 14.0V - minimum safe battery voltage
 I2CWCmd:  DW &H1190    ; write one i2c byte, read one byte, addr 0x90
@@ -1091,4 +1225,4 @@ RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
 IR_HI:    EQU &HD0  ; read the high word of the IR receiver (OUT will clear both words)
-IR_LO:    EQU &HD1  ; read the low word of the IR receiver (OUT will clear both words)
+IR_LO:    EQU &HD1  ; read the low word of the IR receiver (OUT will clear both words)1
