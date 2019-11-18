@@ -77,6 +77,7 @@ Main:
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
+StartStraight:
 	LOADI	350
 	OUT		SONALARM		 ; write HalfMeter to SONALARM to set interrupt
 							 ; to alarm when reflector is within half meter
@@ -240,10 +241,19 @@ State2:
 State3:
 ;	JUMP  Turn90		 ; State 3 is Turn90
 State4:
+	; bounds check
+	CALL	 CheckBoundaries
+	LOAD	 OutX
+	JZERO	 Transit
+	JUMP	 StartStraight
+	LOAD	 OutY
+	JZERO	 Transit
+	JUMP	 StartStraight
+Transit:
 	JUMP  Circling
 End_Sonar_Int:
 	; call bounds detection
-	CALL	 CheckBoundaries
+	;CALL	 CheckBoundaries
 	LOADI	 &B00111111	 
 	OUT	 	 SONARINT	 ; reopen the interrupt
 	RETI
@@ -589,17 +599,17 @@ CheckBoundaries:
 	; we have ~8ft safe boundary on the left
 	; and ~4-5 ft safe boundary on the right
 	; and ~18 ft safe boundary straight ahead
-	; so our max coordinate is (18ft, 8ft) = (5274, 2344)
+	; so our max coordinate is (18ft, 6ft) = (5274, 2344)
 	; and our min coordinate is (if we give fair space for rotation of 2 ft)
-	; (-2ft, -5ft) = (-586, -1465)
+	; (-2ft, -4ft) = (-586, -1465)
 CheckY:
 	; -1465 < Y < 2344
 	IN		YPOS
-	SUB		Ft8
+	SUB		Ft6
 	; check if this is positive -- if so we're out of bounds
 	JPOS	SetOutYPos
 	IN		YPOS
-	ADD		Ft5
+	ADD		Ft4
 	; check if this is negative -- if so we're out of bounds
 	JNEG	SetOutYNeg
 	; if neither, then we're in bounds
@@ -608,11 +618,11 @@ CheckY:
 CheckX:
 	; -586 < X < 5274
 	IN		XPOS
-	SUB		Ft18
+	SUB		Ft16Half
 	; check if positive --> out of bounds
 	JPOS	SetOutXPos
 	IN		XPOS
-	ADD		Ft2
+	;ADD		0
 	; check if negative --> out of bounds
 	JPOS	SetOutXNeg
 	LOADI	0
@@ -1249,7 +1259,10 @@ Ft2:       DW 586       ; ~2ft in 1.04mm units
 Ft3:       DW 879
 Ft4:       DW 1172
 Ft5:	   DW 1465		; ~5ft
+Ft6:	   DW 1758		; ~6ft
 Ft8:	   DW 2344		; ~8ft
+Ft16Half:  DW 4834		; ~16.5ft
+Ft17:	   DW 4981		; ~17ft
 Ft18:	   DW 5274		; ~18ft
 Deg90:     DW 90        ; 90 degrees in odometer units
 Deg180:    DW 180       ; 180
