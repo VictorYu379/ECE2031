@@ -95,7 +95,7 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
-CCNT:       DW 100
+CCNT:       DW 90
 OLDVAL:		DW 0	
 RCNT:       DW 10
 
@@ -131,11 +131,11 @@ CIRCLELOOP:
 	;ADDI    -254
 	;JNEG    FINWALL
 
-	IN		DIST5
-	SUB		200
-	JNEG	DoLarge
-	LOAD	Eight
-	OUT		SSEG2
+	;IN		DIST5
+	;SUB		200
+	;JNEG	DoLarge
+	;LOAD	Eight
+	;OUT		SSEG2
 	LOADI   510
 	OUT     LVELCMD
 	LOADI	285
@@ -158,13 +158,13 @@ CheckTime:
 	JNEG	CIRCLELOOP
 	
 	IN		DIST2
-	SUB		HalfMeter
+	SUB		Ft25
 	JNEG	OutLoop2
 	IN		DIST1
-	SUB		HalfMeter
+	SUB		Ft25
 	JNEG	OutLoop1
 	IN		DIST0
-	SUB		HalfMeter
+	SUB		Ft25
 	JNEG	OutLoop0
 
 	JUMP    CIRCLELOOP
@@ -186,7 +186,7 @@ OutLoop1:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 44
+	ADDI	 50
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
@@ -197,7 +197,7 @@ OutLoop0:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 90
+	ADDI	 95
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
@@ -379,7 +379,7 @@ SonarData:
 TurnTo2:
 ; Turn to the angle where head is pointing to the reflector
 	LOAD	 Zero
-	ADDI	 80
+	ADDI	 85
 	CALL   	 Mod360
 	STORE	 Angle		; prepare parameter for turning
 	JUMP	 Turn
@@ -1171,6 +1171,7 @@ OneMeter:  DW 961       ; ~1m in 1.04mm units
 HalfMeter: DW 481      ; ~0.5m in 1.04mm units
 Ft1:	   DW 293	   ; ~1ft
 Ft2:       DW 586       ; ~2ft in 1.04mm units
+Ft25:	   DW 700
 Ft3:       DW 879
 Ft4:       DW 1172
 Deg90:     DW 90        ; 90 degrees in odometer units
@@ -1179,7 +1180,7 @@ Deg270:    DW 270       ; 270
 Deg360:    DW 360       ; can never actually happen; for math only
 FSlow:     DW 100       ; 100 is about the lowest velocity value that will move
 RSlow:     DW -100
-FMid:      DW 275       ; 350 is a medium speed
+FMid:      DW 225       ; 350 is a medium speed
 RMid:      DW -350
 FFast:     DW 500       ; 500 is almost max speed (511 is max)
 RFast:     DW -500
