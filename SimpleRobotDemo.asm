@@ -77,7 +77,7 @@ Main:
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
-	LOADI	350
+	LOADI	400
 	OUT		SONALARM		 ; write HalfMeter to SONALARM to set interrupt
 							 ; to alarm when reflector is within half meter
 	LOADI	&B00111111
@@ -95,14 +95,14 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
-CCNT:       DW 90
+CCNT:       DW 100
 OLDVAL:		DW 0	
 RCNT:       DW 10
 
 Circling:
 	IN 		TIMER
 	STORE   OLDVAL
-REVERSELOOP:
+REVERSELOOP:				; Reverse function Lixing&Yida
 	LOADI   -200
 	OUT     LVELCMD
 	OUT     RVELCMD
@@ -113,6 +113,10 @@ REVERSELOOP:
 	
 	IN      TIMER
 	STORE   OLDVAL
+	
+	;LOAD  	CCNT
+	;ADDI  	30
+	;STORE 	CCNT
 		
 CIRCLELOOP:
 	;IN 		DIST2
@@ -122,15 +126,19 @@ CIRCLELOOP:
 	;IN      DIST3
 	;SUB     150
 	;JNEG    FINWALL
+	
+	;IN      DIST3
+	;ADDI    -254
+	;JNEG    FINWALL
 
 	IN		DIST5
 	SUB		200
 	JNEG	DoLarge
 	LOAD	Eight
 	OUT		SSEG2
-	LOADI   500
+	LOADI   510
 	OUT     LVELCMD
-	LOADI	290
+	LOADI	285
 	OUT		RVELCMD
 	JUMP	CheckTime
 	
@@ -150,13 +158,13 @@ CheckTime:
 	JNEG	CIRCLELOOP
 	
 	IN		DIST2
-	SUB		OneMeter
+	SUB		HalfMeter
 	JNEG	OutLoop2
 	IN		DIST1
-	SUB		OneMeter
+	SUB		HalfMeter
 	JNEG	OutLoop1
 	IN		DIST0
-	SUB		OneMeter
+	SUB		HalfMeter
 	JNEG	OutLoop0
 
 	JUMP    CIRCLELOOP
@@ -239,7 +247,7 @@ State2:
 	JUMP  TurnToReflector		 ; State 2 is TurnToReflector
 State3:
 ;	JUMP  Turn90		 ; State 3 is Turn90
-State4:
+State4:	
 	JUMP  Circling
 End_Sonar_Int:
 	LOADI	 &B00111111	 
@@ -396,7 +404,7 @@ TurnTo4:
 
 TurnTo0:
 	LOAD	 Zero
-	ADDI	 180
+	ADDI	 179
 	STORE	 Angle
 	JUMP	 Turn
 
@@ -445,7 +453,7 @@ Turn90:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 70
+	ADDI	 65
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
@@ -458,7 +466,7 @@ TURN180:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 180
+	ADDI	 135
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
@@ -1171,7 +1179,7 @@ Deg270:    DW 270       ; 270
 Deg360:    DW 360       ; can never actually happen; for math only
 FSlow:     DW 100       ; 100 is about the lowest velocity value that will move
 RSlow:     DW -100
-FMid:      DW 250       ; 350 is a medium speed
+FMid:      DW 275       ; 350 is a medium speed
 RMid:      DW -350
 FFast:     DW 500       ; 500 is almost max speed (511 is max)
 RFast:     DW -500
