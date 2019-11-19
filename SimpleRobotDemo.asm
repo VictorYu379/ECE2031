@@ -95,6 +95,7 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
+NCNT:		DW 3
 CCNT:       DW 90
 OLDVAL:		DW 0	
 RCNT:       DW 10
@@ -119,18 +120,6 @@ REVERSELOOP:				; Reverse function Lixing&Yida
 	;STORE 	CCNT
 		
 CIRCLELOOP:
-	;IN 		DIST2
-	;SUB     150
-	;JNEG    FINWALL
-	
-	;IN      DIST3
-	;SUB     150
-	;JNEG    FINWALL
-	
-	;IN      DIST3
-	;ADDI    -254
-	;JNEG    FINWALL
-
 	IN		DIST5
 	SUB		Ft1
 	JNEG	DoLarge
@@ -172,6 +161,8 @@ DoSmall:
 	LOADI	265
 	OUT		RVELCMD
 CheckTime:
+	LOAD	NCNT
+	JNEG	CIRCLELOOP
 	IN		TIMER
 	SUB  	CCNT
 	SUB     OLDVAL
@@ -257,6 +248,9 @@ Forever:
 SonarState:
 	DW		&H0000
 Sonar_Int:
+	LOAD	NCNT
+	ADDI	1
+	STORE	NCNT
 	LOAD	Nine
 	OUT		SSEG2
 	LOAD	Zero
