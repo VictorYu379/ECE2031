@@ -77,7 +77,7 @@ Main:
 	; code in that ISR will attempt to control the robot.
 	; If you want to take manual control of the robot,
 	; execute CLI &B0010 to disable the timer interrupt.
-	LOADI	500
+	LOADI	400
 	OUT		SONALARM		 ; write HalfMeter to SONALARM to set interrupt
 							 ; to alarm when reflector is within half meter
 	LOADI	&B00111111
@@ -95,38 +95,69 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
-CCNT:       DW 200
+CCNT:       DW 100
 OLDVAL:		DW 0	
+RCNT:       DW 10
 
 Circling:
 	IN 		TIMER
 	STORE   OLDVAL
-CIRCLELOOP:
-	IN 		DIST2
-	SUB     150
-	JNEG    FINWALL
+REVERSELOOP:				; Reverse function Lixing&Yida
+	LOADI   -200
+	OUT     LVELCMD
+	OUT     RVELCMD
+	IN      TIMER
+	SUB     OLDVAL
+	SUB     RCNT
+	JNEG    REVERSELOOP
 	
-	IN      DIST3
-	SUB     150
-	JNEG    FINWALL
+	IN      TIMER
+	STORE   OLDVAL
+	
+	;LOAD  	CCNT
+	;ADDI  	30
+	;STORE 	CCNT
+		
+CIRCLELOOP:
+	;IN 		DIST2
+	;SUB     150
+	;JNEG    FINWALL
+	
+	;IN      DIST3
+	;SUB     150
+	;JNEG    FINWALL
+	
+	;IN      DIST3
+	;ADDI    -254
+	;JNEG    FINWALL
+
+CHECKHIT:
+	LOAD	LVEL
+	ADDI	-10
+	JNEG	FINWALL
+
+	LOAD	RVEL
+	ADDI	-10
+	JNEG	FINWALL
 
 	IN		DIST5
-	SUB		Ft1
+	SUB		200
 	JNEG	DoLarge
+
 	LOAD	Eight
 	OUT		SSEG2
-	LOADI   300
+	LOADI   510
 	OUT     LVELCMD
-	LOADI	180
+	LOADI	285
 	OUT		RVELCMD
 	JUMP	CheckTime
 	
 DoLarge:
 	LOAD	Seven
 	OUT		SSEG2
-	LOADI   180
+	LOADI   100
 	OUT     LVELCMD
-	LOADI	180
+	LOADI	100
 	OUT		RVELCMD
 CheckTime:
 	IN		TIMER
@@ -137,13 +168,13 @@ CheckTime:
 	JNEG	CIRCLELOOP
 	
 	IN		DIST2
-	SUB		OneMeter
+	SUB		HalfMeter
 	JNEG	OutLoop2
 	IN		DIST1
-	SUB		OneMeter
+	SUB		HalfMeter
 	JNEG	OutLoop1
 	IN		DIST0
-	SUB		OneMeter
+	SUB		HalfMeter
 	JNEG	OutLoop0
 
 	JUMP    CIRCLELOOP
@@ -163,7 +194,7 @@ OutLoop2:
 OutLoop1:
 ; Reset absolute angle odometry to 0
 	LOAD	 Zero
-	OUT	 THETA
+	OUT	     THETA
 ; Set the angle to turn as 90
 	ADDI	 44
 	STORE	 Angle
@@ -174,7 +205,7 @@ OutLoop1:
 OutLoop0:
 ; Reset absolute angle odometry to 0
 	LOAD	 Zero
-	OUT	 THETA
+	OUT	     THETA
 ; Set the angle to turn as 90
 	ADDI	 90
 	STORE	 Angle
@@ -183,8 +214,18 @@ OutLoop0:
 	JUMP	 End_Sonar_Int
 	
 FINWALL:
-	CALL     TURN180
-	JUMP     End_Sonar_Int
+	IN 		TIMER
+	STORE   OLDVAL
+REVERSELOOP:				; Reverse function Lixing&Yida
+	LOADI   -200
+	OUT     LVELCMD
+	OUT     RVELCMD
+	IN      TIMER
+	SUB     OLDVAL
+	SUB     RCNT
+	JNEG    REVERSELOOP
+	CALL    TURN180
+	JUMP    End_Sonar_Int
 
 
 ; InfLoop: 
@@ -225,8 +266,8 @@ State1:
 State2:
 	JUMP  TurnToReflector		 ; State 2 is TurnToReflector
 State3:
-	JUMP  Turn90		 ; State 3 is Turn90
-State4:
+;	JUMP  Turn90		 ; State 3 is Turn90
+State4:	
 	JUMP  Circling
 End_Sonar_Int:
 	LOADI	 &B00111111	 
@@ -383,7 +424,7 @@ TurnTo4:
 
 TurnTo0:
 	LOAD	 Zero
-	ADDI	 180
+	ADDI	 179
 	STORE	 Angle
 	JUMP	 Turn
 
@@ -432,7 +473,7 @@ Turn90:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 70
+	ADDI	 65
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
@@ -445,7 +486,7 @@ TURN180:
 	LOAD	 Zero
 	OUT	 THETA
 ; Set the angle to turn as 90
-	ADDI	 180
+	ADDI	 135
 	STORE	 Angle
 ; Turn until desired angle met
 	CALL	 KeepTurning
@@ -1158,7 +1199,7 @@ Deg270:    DW 270       ; 270
 Deg360:    DW 360       ; can never actually happen; for math only
 FSlow:     DW 100       ; 100 is about the lowest velocity value that will move
 RSlow:     DW -100
-FMid:      DW 350       ; 350 is a medium speed
+FMid:      DW 275       ; 350 is a medium speed
 RMid:      DW -350
 FFast:     DW 500       ; 500 is almost max speed (511 is max)
 RFast:     DW -500
@@ -1212,4 +1253,4 @@ RESETPOS: EQU &HC3  ; write anything here to reset odometry to 0
 RIN:      EQU &HC8
 LIN:      EQU &HC9
 IR_HI:    EQU &HD0  ; read the high word of the IR receiver (OUT will clear both words)
-IR_LO:    EQU &HD1  ; read the low word of the IR receiver (OUT will clear both words)
+IR_LO:    EQU &HD1  ; read the low word of the IR receiver (OUT will clear both words)1
