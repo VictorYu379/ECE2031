@@ -95,7 +95,7 @@ GoStraight:				 ; Go straight with FSlow speed and current direction
 	CALL	ControlMovement
 	JUMP	GoStraight
 
-NCNT:		DW 3
+NCNT:		DW 2
 CCNT:       DW 90
 OLDVAL:		DW 0	
 RCNT:       DW 10
@@ -114,10 +114,6 @@ REVERSELOOP:				; Reverse function Lixing&Yida
 	
 	IN      TIMER
 	STORE   OLDVAL
-	
-	;LOAD  	CCNT
-	;ADDI  	30
-	;STORE 	CCNT
 		
 CIRCLELOOP:
 	IN		DIST5
@@ -146,7 +142,7 @@ DoLarge:
 	OUT		RVELCMD
 	JUMP	CheckTime
 DoVeryLarge:
-	LOAD	Seven
+	LOAD	Five
 	OUT		SSEG2
 	LOADI   400
 	OUT     LVELCMD
@@ -167,7 +163,6 @@ CheckTime:
 	SUB  	CCNT
 	SUB     OLDVAL
 	
-	OUT	    SSEG1
 	JNEG	CIRCLELOOP
 	
 	IN		DIST2
@@ -249,7 +244,8 @@ SonarState:
 	DW		&H0000
 Sonar_Int:
 	LOAD	NCNT
-	ADDI	1
+	ADDI	-1
+	OUT		SSEG1
 	STORE	NCNT
 	LOAD	Nine
 	OUT		SSEG2
@@ -326,6 +322,8 @@ StopBot:
 Closest:
 	IN		 DIST0
 	STORE	 MinValue	 ; give out AC for next reading
+	LOADI	 0
+	STORE	 MinIndex
 	IN		 DIST1
 	SUB	 MinValue	 ; DIST1 - MinValue
 	JPOS	 ReadSonar2
@@ -360,7 +358,7 @@ ReadSonar4:
 ReadSonar5:
 	IN		 DIST5
 	SUB	 MinValue	 ; DIST5 - MinValue
-	JUMP	 State2
+	JPOS	 State2
 	ADD	 MinValue
 	STORE	 MinValue	 ; Update MinValue
 	LOADI	 5
@@ -374,7 +372,6 @@ MinIndex:
 ; 2. Turn to the closest reflector
 TurnToReflector:
 	LOAD	 MinIndex	 ; load the index of the sonar with closest reflector
-	OUT    SSEG1
 	JZERO	 TurnTo0
 	ADDI	 -1
 	JZERO  TurnTo1
@@ -454,7 +451,6 @@ KeepTurning:
 	LOAD	 Angle				; subtract parameter Angle
 	SUB		 Temp_THETA
 	CALL	 Abs
-	OUT		 SSEG1
 	;ADDI	 -3					; if the difference is bigger than 3 degrees
 	JPOS	 KeepTurning		; keep turning
 	RETURN						; otherwise, return
